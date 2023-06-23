@@ -1,0 +1,3 @@
+[submodule "async_simple"]
+	path = async_simple
+	url = https://github.com/alibaba/async_simple.git
