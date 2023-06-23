@@ -8,5 +8,5 @@ set(ASYNC_SIMPLE_ENABLE_TESTS OFF)
 
 add_subdirectory(async_simple)
 
-add_executable(wolf_sim main.cpp)
+add_executable(wolf_sim main.cpp wolf_sim/AlwaysBlock.h wolf_sim/Environment.cpp)
 target_link_libraries(wolf_sim PRIVATE async_simple)
