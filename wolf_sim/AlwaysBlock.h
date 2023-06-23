@@ -6,9 +6,9 @@
 #define WOLF_SIM_ALWAYSBLOCK_H
 #include "async_simple/coro/Lazy.h"
 
-namespace {
+namespace wolf_sim {
     class AlwaysBlock {
-    private:
+    protected:
         double timestamp;
     public:
         virtual async_simple::coro::Lazy<void> always() = 0;

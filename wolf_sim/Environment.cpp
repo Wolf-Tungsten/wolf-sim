@@ -25,5 +25,5 @@ async_simple::coro::Lazy<void> wolf_sim::Environment::coroStart() {
 
 void wolf_sim::Environment::run() {
     async_simple::executors::SimpleExecutor executor(threadNum);
-    syncAwait(coroStart().via(&executor)); 
+    syncAwait(coroStart().via(&executor));
 }
