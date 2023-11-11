@@ -17,7 +17,8 @@ namespace wolf_sim {
         async_simple::coro::Lazy<void> coroStart();
     public:
         Environment(int _threadNum);
-        void addAlwaysBlock(AlwaysBlock &alwaysBlock);
+        void addAlwaysBlock(const AlwaysBlock &alwaysBlock);
+        void addComponent(const Component &component);
         void run();
     };
 }

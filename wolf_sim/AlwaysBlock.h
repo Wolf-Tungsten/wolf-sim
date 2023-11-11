@@ -5,14 +5,22 @@
 #ifndef WOLF_SIM_ALWAYSBLOCK_H
 #define WOLF_SIM_ALWAYSBLOCK_H
 #include "async_simple/coro/Lazy.h"
+#include <atomic>
 
 namespace wolf_sim {
+
+    typedef async_simple::coro::Lazy<void> ReturnNothing;
+
     class AlwaysBlock {
     protected:
-        double timestamp;
+        timestamp_t &blockTimestamp;
+        AlwaysBlock() = delete;
+        AlwaysBlock(const AlwaysBlock&) = delete;
+        AlwaysBlock& operator=(const AlwaysBlock&) = delete;
     public:
-        virtual async_simple::coro::Lazy<void> always() = 0;
+        virtual ReturnNothing always() = 0;
     };
+    
 }
 
 
