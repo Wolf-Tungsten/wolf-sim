@@ -5,12 +5,13 @@
 #ifndef WOLF_SIM_REGISTER_H
 #define WOLF_SIM_REGISTER_H
 #include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/Mutex.h"
+#include "async_simple/coro/SpinLock.h"
 #include "async_simple/coro/ConditionVariable.h"
 #include <vector>
 #include <queue>
 #include <map>
 #include <utility>
+#include <iostream>
 
 namespace wolf_sim
 {
@@ -19,10 +20,10 @@ namespace wolf_sim
     {
     private:
         std::queue<std::pair<long, PayloadType>> internalQueue;
-        async_simple::coro::Mutex mutex;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotFull;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotEmpty;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNextOutputReady;
+        async_simple::coro::SpinLock mutex;
+        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNotFull;
+        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNotEmpty;
+        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNextOutputReady;
         uint64_t getFlag;             // 当 outPort 数量小于等于 64 时使用 bit 操作进行
         std::vector<bool> getFlagVec; // 当 outPort 数量超过 64 时退化成 vec 操作
         int nextOutIdx;
@@ -83,6 +84,7 @@ namespace wolf_sim
             }
             // 读取队列
             auto tAndp = internalQueue.front();
+            std::cout << "get " << tAndp.second << std::endl;
             // 协调时间戳
 
             if (tAndp.first > b.blockTimestamp){

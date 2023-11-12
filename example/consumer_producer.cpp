@@ -15,6 +15,7 @@ public:
     wolf_sim::ReturnNothing always() override {
         int payload = 0;
         while (1) {
+            std::cout << "Producer try to put " << payload << " at " << blockTimestamp << std::endl;
             blockTimestamp += delay;
             co_await reg.put(payload);
             std::cout << "Producer put " << payload << " at " << blockTimestamp << std::endl;
@@ -33,11 +34,13 @@ private:
     wolf_sim::RegRef<int, 10> reg;
 public:
     Consumer(wolf_sim::Register<int, 10>& reg_, int idx_, int delay_) : idx(idx_), delay(delay_) {
+        std::cout << "Consumer " << idx << " created" << std::endl;
         reg.bind(this, &reg_);
     }
 
     wolf_sim::ReturnNothing always() override {
         while (1) {
+            std::cout << "Consumer " << idx << " try to get at " << blockTimestamp << std::endl;
             blockTimestamp += delay;
             auto payload = co_await reg.get();
             std::cout << "Consumer " << idx << " get " << payload << " at " << blockTimestamp << std::endl;
@@ -47,7 +50,7 @@ public:
 
 
 int main() {
-    wolf_sim::Environment env(0);
+    wolf_sim::Environment env(1);
     wolf_sim::Register<int, 10> reg;
     Producer producer(reg, 1);
     std::vector<Consumer> consumersVec;
