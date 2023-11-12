@@ -14,7 +14,7 @@
 
 namespace wolf_sim
 {
-    template <typename PayloadType, int outPortNr, int depth>
+    template <typename PayloadType, int depth>
     class Register
     {
     private:
@@ -26,6 +26,7 @@ namespace wolf_sim
         uint64_t getFlag;             // 当 outPort 数量小于等于 64 时使用 bit 操作进行
         std::vector<bool> getFlagVec; // 当 outPort 数量超过 64 时退化成 vec 操作
         int nextOutIdx;
+        int outPortNr;
         long regPutTimestamp;
         // 禁止拷贝构造
         Register(const Register &r) = delete;
@@ -38,6 +39,7 @@ namespace wolf_sim
             regPutTimestamp = 0;
             nextOutIdx = 0;
             getFlag = 0;
+            outPortNr = 0;
             for (int i = 0; i < outPortNr; i++)
             {
                 getFlagVec.push_back(false);
@@ -46,9 +48,7 @@ namespace wolf_sim
 
         // 分配 block Idx 
         int allocOutIdx() {
-            if(nextOutIdx >= outPortNr){
-                throw std::runtime_error("Register allocOutIdx: outPortNr exceeded");
-            }
+            outPortNr++;
             return nextOutIdx++;
         }
 
@@ -195,7 +195,7 @@ namespace wolf_sim
         };
     };
 
-    template <typename PayloadType, int outPortNr, int depth>
+    template <typename PayloadType, int depth>
     class RegRef {
         // AlwaysBlock 通过 RegRef 持有对 Register 的指针，RegRef 也持有对 AlwaysBlock 的指针
         // AlwaysBlock 通过 RegRef 调用 Register 的 put/get/nonBlockPut/nonBlockGet 方法
@@ -203,11 +203,11 @@ namespace wolf_sim
         // RegRef 通过 bind 建立绑定关系
 
         private:
-            Register<PayloadType, outPortNr, depth> *regPtr;
+            Register<PayloadType, depth> *regPtr;
             AlwaysBlock *blockPtr;
             int outIdx;
         public:
-            void bind(AlwaysBlock* blockPtr_, Register<PayloadType, outPortNr, depth>* regPtr_){
+            void bind(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
                 regPtr = regPtr_;
                 outIdx = regPtr->allocOutIdx();

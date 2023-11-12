@@ -12,13 +12,12 @@ namespace wolf_sim {
     typedef async_simple::coro::Lazy<void> ReturnNothing;
 
     class AlwaysBlock {
-    protected:
-        timestamp_t &blockTimestamp;
-        AlwaysBlock() = delete;
-        AlwaysBlock(const AlwaysBlock&) = delete;
-        AlwaysBlock& operator=(const AlwaysBlock&) = delete;
     public:
         virtual ReturnNothing always() = 0;
+        long blockTimestamp;
+        AlwaysBlock(){ 
+            blockTimestamp = 0;
+        };
     };
     
 }
