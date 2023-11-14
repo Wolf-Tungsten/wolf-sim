@@ -1,3 +1,4 @@
+
 //
 // Created by gaoruihao on 6/23/23.
 //
@@ -5,7 +6,6 @@
 #ifndef WOLF_SIM_ALWAYSBLOCK_H
 #define WOLF_SIM_ALWAYSBLOCK_H
 #include "async_simple/coro/Lazy.h"
-#include <atomic>
 
 namespace wolf_sim {
 
@@ -18,6 +18,10 @@ namespace wolf_sim {
         AlwaysBlock(){ 
             blockTimestamp = 0;
         };
+        AlwaysBlock(const AlwaysBlock&) = delete;
+        AlwaysBlock& operator=(const AlwaysBlock&) = delete;
+        AlwaysBlock(AlwaysBlock&&) = delete;
+        AlwaysBlock& operator=(AlwaysBlock&&) = delete;
     };
     
 }

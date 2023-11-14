@@ -2,6 +2,7 @@
 #include "wolf_sim/AlwaysBlock.h"
 #include "wolf_sim/Register.h"
 #include <iostream>
+#include <memory>
 
 class Producer : public wolf_sim::AlwaysBlock {
 private:
@@ -9,7 +10,7 @@ private:
     int delay;
 public:
     Producer(wolf_sim::Register<int, 10> &reg_, int delay_) : delay(delay_) {
-        reg.bind(this, &reg_);
+        reg.asOutput(this, &reg_);
     }
 
     wolf_sim::ReturnNothing always() override {
@@ -35,7 +36,7 @@ private:
 public:
     Consumer(wolf_sim::Register<int, 10>& reg_, int idx_, int delay_) : idx(idx_), delay(delay_) {
         std::cout << "Consumer " << idx << " created" << std::endl;
-        reg.bind(this, &reg_);
+        reg.asInput(this, &reg_);
     }
 
     wolf_sim::ReturnNothing always() override {
@@ -52,10 +53,10 @@ public:
 int main() {
     wolf_sim::Environment env(1);
     wolf_sim::Register<int, 10> reg;
-    Producer producer(reg, 1);
-    std::vector<Consumer> consumersVec;
+    std::shared_ptr<Producer> producer = std::make_shared<Producer>(reg, 1);
+    std::vector<std::shared_ptr<Consumer>> consumersVec;
     for(int i = 0; i < 10; i++){
-        consumersVec.emplace_back(reg, i, i+1);
+        consumersVec.push_back(std::make_shared<Consumer>(reg, i , 5));
         env.addAlwaysBlock(consumersVec[i]);
     }
     env.addAlwaysBlock(producer);

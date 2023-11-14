@@ -5,7 +5,7 @@
 #ifndef WOLF_SIM_REGISTER_H
 #define WOLF_SIM_REGISTER_H
 #include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/SpinLock.h"
+#include "async_simple/coro/Mutex.h"
 #include "async_simple/coro/ConditionVariable.h"
 #include <vector>
 #include <queue>
@@ -20,19 +20,21 @@ namespace wolf_sim
     {
     private:
         std::queue<std::pair<long, PayloadType>> internalQueue;
-        async_simple::coro::SpinLock mutex;
-        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNotFull;
-        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNotEmpty;
-        async_simple::coro::ConditionVariable<async_simple::coro::SpinLock> condNextOutputReady;
+        async_simple::coro::Mutex mutex;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotFull;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotEmpty;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNextOutputReady;
         uint64_t getFlag;             // 当 outPort 数量小于等于 64 时使用 bit 操作进行
         std::vector<bool> getFlagVec; // 当 outPort 数量超过 64 时退化成 vec 操作
         int nextOutIdx;
         int outPortNr;
         long regPutTimestamp;
-        // 禁止拷贝构造
+        // 禁止拷贝
         Register(const Register &r) = delete;
-        // 禁止赋值
         Register &operator=(const Register &r) = delete;
+        // 禁止移动
+        Register(Register &&r) = delete;
+        Register &operator=(Register &&r) = delete;
 
     public:
         explicit Register()
@@ -209,10 +211,14 @@ namespace wolf_sim
             AlwaysBlock *blockPtr;
             int outIdx;
         public:
-            void bind(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
+            void asInput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
                 regPtr = regPtr_;
                 outIdx = regPtr->allocOutIdx();
+            }
+            void asOutput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
+                blockPtr = blockPtr_;
+                regPtr = regPtr_;
             }
             async_simple::coro::Lazy<void> put(PayloadType p){
                 co_await regPtr->put(*blockPtr, p);

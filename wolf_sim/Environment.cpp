@@ -11,15 +11,19 @@ wolf_sim::Environment::Environment(int _threadNum) : threadNum(_threadNum){
     running = false;
 }
 
-void wolf_sim::Environment::addAlwaysBlock(AlwaysBlock &alwaysBlock) {
+void wolf_sim::Environment::addAlwaysBlock(std::shared_ptr<AlwaysBlock> alwaysBlockPtr) {
     if(running){
         throw std::runtime_error("Not allowed to add always block when simulation is running");
     }
-    alwaysBlockVec.push_back(alwaysBlock.always());
+    alwaysBlockVec.push_back(alwaysBlockPtr);
 }
 
 async_simple::coro::Lazy<void> wolf_sim::Environment::coroStart() {
-    co_await collectAllPara(std::move(alwaysBlockVec));
+    std::vector<async_simple::coro::Lazy<void>> alwaysCoroVec;
+    for(auto alwaysBlockPtr: alwaysBlockVec){
+        alwaysCoroVec.push_back(alwaysBlockPtr->always());
+    }
+    co_await async_simple::coro::collectAllPara(std::move(alwaysCoroVec));
     co_return;
 }
 
