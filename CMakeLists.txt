@@ -12,6 +12,8 @@ set(ASYNC_SIMPLE_BUILD_DEMO_EXAMPLE OFF)
 
 add_subdirectory(async_simple)
 
+add_subdirectory(ramulator)
+
 add_subdirectory(wolf_sim)
 
 add_subdirectory(example)
