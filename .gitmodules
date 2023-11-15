@@ -1,6 +1,6 @@
-[submodule "async_simple"]
-	path = async_simple
-	url = https://github.com/alibaba/async_simple.git
 [submodule "ramulator"]
 	path = ramulator
 	url = git@github.com:CMU-SAFARI/ramulator.git
+[submodule "async_simple"]
+	path = async_simple
+	url = git@github.com:alibaba/async_simple.git
