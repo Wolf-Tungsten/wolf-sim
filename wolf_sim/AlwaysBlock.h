@@ -15,6 +15,7 @@ namespace wolf_sim {
     public:
         virtual ReturnNothing always() = 0;
         long blockTimestamp;
+        std::string blockIdentifier;
         AlwaysBlock(){ 
             blockTimestamp = 0;
         };

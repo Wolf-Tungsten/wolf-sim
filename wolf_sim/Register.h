@@ -19,16 +19,16 @@ namespace wolf_sim
     class Register
     {
     private:
-        std::queue<std::pair<long, PayloadType>> internalQueue;
+        std::queue<std::pair<long, PayloadType>> payloadQueue;
+        std::queue<long> retiredQueue;
         async_simple::coro::Mutex mutex;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotFull;
+        async_simple::coro::Notifier getNotifier;
         async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotEmpty;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNextOutputReady;
-        uint64_t getFlag;             // 当 outPort 数量小于等于 64 时使用 bit 操作进行
-        std::vector<bool> getFlagVec; // 当 outPort 数量超过 64 时退化成 vec 操作
+        async_simple::coro::Notifier outputDoneNotifier;
         int nextOutIdx;
         int outPortNr;
-        long regPutTimestamp;
+        long regGetTimestamp;
+        int outputCounter;
         // 禁止拷贝
         Register(const Register &r) = delete;
         Register &operator=(const Register &r) = delete;
@@ -39,163 +39,81 @@ namespace wolf_sim
     public:
         explicit Register()
         {
-            regPutTimestamp = 0;
+            regGetTimestamp = 0;
             nextOutIdx = 0;
-            getFlag = 0;
             outPortNr = 0;
-            for (int i = 0; i < outPortNr; i++)
-            {
-                getFlagVec.push_back(false);
-            }
+            outputCounter = 0;
         };
 
         // 分配 block Idx 
-        int allocOutIdx() {
+        void addOutput() {
             outPortNr++;
-            return nextOutIdx++;
         }
 
         async_simple::coro::Lazy<void> put(AlwaysBlock &b, PayloadType p){
             co_await mutex.coLock();
-            if (internalQueue.size() >= depth)
-            {
-                co_await condNotFull.wait(mutex, [&]
-                                          { return internalQueue.size() < depth; });
-                if (regPutTimestamp > b.blockTimestamp)
-                {
-                    b.blockTimestamp = regPutTimestamp;
-                }
+            while((!retiredQueue.empty()) && b.blockTimestamp >= retiredQueue.front()){
+                retiredQueue.pop();
             }
-            internalQueue.push(std::make_pair(b.blockTimestamp, p));
+            assert(payloadQueue.size() + retiredQueue.size() <= depth);
+            if (payloadQueue.size() + retiredQueue.size() == depth)
+            {
+                if(retiredQueue.empty()){
+                    mutex.unlock();
+                    // 等待 get 操作完成
+                    co_await getNotifier.wait();
+                    co_await mutex.coLock();
+                }
+                b.blockTimestamp = retiredQueue.front();
+                retiredQueue.pop();
+            }
+            payloadQueue.push(std::make_pair(b.blockTimestamp, p));
             condNotEmpty.notifyAll();
             mutex.unlock();
         };
 
-        async_simple::coro::Lazy<PayloadType> get(AlwaysBlock &b, int outIdx){
+        async_simple::coro::Lazy<PayloadType> get(AlwaysBlock &b){
             co_await mutex.coLock();
-            // 检查 getFlag 当前 block 是否在本轮访存中已读取过
-            bool flag = outPortNr <= 64 ? (getFlag & (1 << outIdx)) : getFlagVec[outIdx];
-            if (flag){
-                co_await condNextOutputReady.wait(mutex, [&]{ 
-                    flag = outPortNr <= 64 ? (getFlag & (1 << outIdx)) : getFlagVec[outIdx];
-                    return !flag; });
-            }
             // 检查队列是否为空
-            if (internalQueue.empty()){
-                co_await condNotEmpty.wait(mutex, [&]{ return !internalQueue.empty(); });
+            if (payloadQueue.empty()){
+                co_await condNotEmpty.wait(mutex, [&]{ return !payloadQueue.empty(); });
             }
             // 读取队列
-            auto tAndp = internalQueue.front();
-            std::cout << "get " << tAndp.second << std::endl;
-            // 协调时间戳
+            std::pair<long, PayloadType> tAndp = payloadQueue.front();
 
-            if (tAndp.first > b.blockTimestamp){
-                b.blockTimestamp = tAndp.first;
-                regPutTimestamp = tAndp.first;
-            } else {
-                regPutTimestamp = b.blockTimestamp;
+            // 协调时间戳
+            // 1. regGetTimestamp 至少推进到 payloadTimestamp
+            if (tAndp.first > regGetTimestamp){
+                regGetTimestamp = tAndp.first;
+            } 
+            // 2.根据 blockTimestamp 推进
+            if (b.blockTimestamp > regGetTimestamp) {
+                regGetTimestamp = b.blockTimestamp;
             }
-            // 标记 getFlag
-            if (outPortNr <= 64){
-                getFlag |= (1 << outIdx);
+            // 当所有 block 读取均完成时，regGetTimestamp = max(regGetTimestamp, payloadTimestamp, blockTimestamp0, blockTimestamp1, ...)
+
+            outputCounter += 1;
+            if(outputCounter < outPortNr){
+                mutex.unlock();
+                co_await outputDoneNotifier.wait();
             } else {
-                getFlagVec[outIdx] = true;
+               outputCounter = 0;
+               payloadQueue.pop();
+               retiredQueue.push(regGetTimestamp);
+               getNotifier.notify();
+               outputDoneNotifier.notify(); 
+               mutex.unlock();
             }
-            // 检查是否所有 block 均完成读取
-            if (outPortNr <= 64){
-                if (getFlag == (1 << outPortNr) - 1){
-                    getFlag = 0;
-                    internalQueue.pop();
-                    condNotFull.notifyAll();
-                    condNextOutputReady.notifyAll();
-                }
-            } else {
-                bool allFlag = true;
-                for (int i = 0; i < outPortNr; i++){
-                    allFlag &= getFlagVec[i];
-                }
-                if (allFlag){
-                    for (int i = 0; i < outPortNr; i++){
-                        getFlagVec[i] = false;
-                    }
-                    internalQueue.pop();
-                    condNotFull.notifyAll();
-                    condNextOutputReady.notifyAll();
-                }
-            }
-            mutex.unlock();
+
+            b.blockTimestamp = regGetTimestamp;
             co_return tAndp.second;
         };
+
         async_simple::coro::Lazy<bool> nonBlockPut(AlwaysBlock &b, PayloadType p){
-            co_await mutex.coLock();
-            if (internalQueue.size() >= depth)
-            {
-                if (regPutTimestamp > b.blockTimestamp)
-                {
-                    b.blockTimestamp = regPutTimestamp;
-                }
-                mutex.unlock();
-                co_return false;
-            }
-            internalQueue.push(std::make_pair(b.blockTimestamp, p));
-            condNotEmpty.notifyAll();
-            mutex.unlock(); 
-            co_return true;
+            co_return false;
         };
-        async_simple::coro::Lazy<bool> nonBlockGet(AlwaysBlock &b, int outIdx, PayloadType &pRet){
-            co_await mutex.coLock();
-            // 检查 getFlag 当前 block 是否在本轮访存中已读取过
-            bool flag = outPortNr <= 64 ? (getFlag & (1 << outIdx)) : getFlagVec[outIdx];
-            if (flag){
-                co_await condNextOutputReady.wait(mutex, [&]{ 
-                    flag = outPortNr <= 64 ? (getFlag & (1 << outIdx)) : getFlagVec[outIdx];
-                    return !flag; });
-            }
-            // 检查队列是否为空
-            if (internalQueue.empty()){
-                mutex.unlock();
-                co_return false;
-            }
-            // 读取队列
-            auto tAndp = internalQueue.front();
-            // 协调时间戳
-            if (tAndp.first > b.blockTimestamp){
-                b.blockTimestamp = tAndp.first;
-                regPutTimestamp = tAndp.first;
-            } else {
-                regPutTimestamp = b.blockTimestamp;
-            }
-            // 标记 getFlag
-            if (outPortNr <= 64){
-                getFlag |= (1 << outIdx);
-            } else {
-                getFlagVec[outIdx] = true;
-            }
-            // 检查是否所有 block 均完成读取
-            if (outPortNr <= 64){
-                if (getFlag == (1 << outPortNr) - 1){
-                    getFlag = 0;
-                    internalQueue.pop();
-                    condNotFull.notifyAll();
-                    condNextOutputReady.notifyAll();
-                }
-            } else {
-                bool allFlag = true;
-                for (int i = 0; i < outPortNr; i++){
-                    allFlag &= getFlagVec[i];
-                }
-                if (allFlag){
-                    for (int i = 0; i < outPortNr; i++){
-                        getFlagVec[i] = false;
-                    }
-                    internalQueue.pop();
-                    condNotFull.notifyAll();
-                    condNextOutputReady.notifyAll();
-                }
-            }
-            mutex.unlock();
-            pRet = tAndp.second;
-            co_return true;
+        async_simple::coro::Lazy<bool> nonBlockGet(AlwaysBlock &b, PayloadType &pRet){
+            co_return false;
         };
     };
 
@@ -203,18 +121,15 @@ namespace wolf_sim
     class RegRef {
         // AlwaysBlock 通过 RegRef 持有对 Register 的指针，RegRef 也持有对 AlwaysBlock 的指针
         // AlwaysBlock 通过 RegRef 调用 Register 的 put/get/nonBlockPut/nonBlockGet 方法
-        // RegRef 记录当前 AlwaysBlock 对所持有 Register 的 outIdx
-        // RegRef 通过 bind 建立绑定关系
 
         private:
             Register<PayloadType, depth> *regPtr;
             AlwaysBlock *blockPtr;
-            int outIdx;
         public:
             void asInput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
                 regPtr = regPtr_;
-                outIdx = regPtr->allocOutIdx();
+                regPtr->addOutput();
             }
             void asOutput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
@@ -224,13 +139,13 @@ namespace wolf_sim
                 co_await regPtr->put(*blockPtr, p);
             }
             async_simple::coro::Lazy<PayloadType> get(){
-                co_return co_await regPtr->get(*blockPtr, outIdx);
+                co_return co_await regPtr->get(*blockPtr);
             }
             async_simple::coro::Lazy<bool> nonBlockPut(PayloadType p){
                 co_return co_await regPtr->nonBlockPut(*blockPtr, p);
             }
             async_simple::coro::Lazy<bool> nonBlockGet(PayloadType &pRet){
-                co_return co_await regPtr->nonBlockGet(*blockPtr, outIdx, pRet);
+                co_return co_await regPtr->nonBlockGet(*blockPtr, pRet);
             } 
     };
 }

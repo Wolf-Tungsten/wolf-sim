@@ -8,8 +8,8 @@
             "defines": [],
             "compilerPath": "/opt/rh/devtoolset-10/root/usr/bin/gcc",
             "cStandard": "c11",
-            "cppStandard": "c++14",
-            "intelliSenseMode": "linux-clang-x64"
+            "cppStandard": "c++20",
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4

@@ -36,6 +36,7 @@ private:
 public:
     Consumer(wolf_sim::Register<int, 10>& reg_, int idx_, int delay_) : idx(idx_), delay(delay_) {
         std::cout << "Consumer " << idx << " created" << std::endl;
+        blockIdentifier = "Consumer " + std::to_string(idx);
         reg.asInput(this, &reg_);
     }
 
@@ -45,6 +46,9 @@ public:
             blockTimestamp += delay;
             auto payload = co_await reg.get();
             std::cout << "Consumer " << idx << " get " << payload << " at " << blockTimestamp << std::endl;
+            if(payload == 20){
+                break;
+            }
         }
     }
 };
