@@ -16,15 +16,16 @@ public:
     wolf_sim::ReturnNothing always() override {
         int payload = 0;
         while (1) {
-            std::cout << "Producer try to put " << payload << " at " << blockTimestamp << std::endl;
+            //std::cout << "Producer try to put " << payload << " at " << blockTimestamp << std::endl;
             blockTimestamp += delay;
             co_await reg.put(payload);
-            std::cout << "Producer put " << payload << " at " << blockTimestamp << std::endl;
-            if (payload == 20) {
+            //std::cout << "Producer put " << payload << " at " << blockTimestamp << std::endl;
+            if (payload == 10000) {
                 break;
             }
             payload++;
         }
+        std::cout << "Producer" <<" finished at:" << blockTimestamp << std::endl;
     }
 };
 
@@ -41,25 +42,27 @@ public:
     }
 
     wolf_sim::ReturnNothing always() override {
+        int reqCount = 0;
         while (1) {
-            std::cout << "Consumer " << idx << " try to get at " << blockTimestamp << std::endl;
             blockTimestamp += delay;
+            //std::cout << "Consumer " << idx << " request " << reqCount++ << " get at " << blockTimestamp << std::endl;
             auto payload = co_await reg.get();
-            std::cout << "Consumer " << idx << " get " << payload << " at " << blockTimestamp << std::endl;
-            if(payload == 20){
+            //std::cout << "Consumer " << idx << " get " << payload << " at " << blockTimestamp << std::endl;
+            if(payload == 10000){
                 break;
             }
         }
+        std::cout << blockIdentifier <<" finished at:" << blockTimestamp << std::endl;
     }
 };
 
 
 int main() {
-    wolf_sim::Environment env(1);
+    wolf_sim::Environment env(18);
     wolf_sim::Register<int, 10> reg;
     std::shared_ptr<Producer> producer = std::make_shared<Producer>(reg, 1);
     std::vector<std::shared_ptr<Consumer>> consumersVec;
-    for(int i = 0; i < 10; i++){
+    for(int i = 0; i < 100; i++){
         consumersVec.push_back(std::make_shared<Consumer>(reg, i , 5));
         env.addAlwaysBlock(consumersVec[i]);
     }

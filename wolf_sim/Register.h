@@ -22,13 +22,15 @@ namespace wolf_sim
         std::queue<std::pair<long, PayloadType>> payloadQueue;
         std::queue<long> retiredQueue;
         async_simple::coro::Mutex mutex;
-        async_simple::coro::Notifier getNotifier;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNotEmpty;
-        async_simple::coro::Notifier outputDoneNotifier;
-        int nextOutIdx;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condRetiredQueueNotEmpty;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condPayloadQueueNotEmpty;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condNextOutput;
+        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condConsumerBlockNotReady;
+        std::vector<bool> signInSheet;
         int outPortNr;
         long regGetTimestamp;
         int outputCounter;
+        bool consumerBlockReady;
         // 禁止拷贝
         Register(const Register &r) = delete;
         Register &operator=(const Register &r) = delete;
@@ -40,14 +42,15 @@ namespace wolf_sim
         explicit Register()
         {
             regGetTimestamp = 0;
-            nextOutIdx = 0;
             outPortNr = 0;
             outputCounter = 0;
+            consumerBlockReady = false;
         };
 
-        // 分配 block Idx 
-        void addOutput() {
-            outPortNr++;
+        // 分配 outIdx 
+        int addOutput() {
+            signInSheet.push_back(false);
+            return outPortNr++;
         }
 
         async_simple::coro::Lazy<void> put(AlwaysBlock &b, PayloadType p){
@@ -58,26 +61,26 @@ namespace wolf_sim
             assert(payloadQueue.size() + retiredQueue.size() <= depth);
             if (payloadQueue.size() + retiredQueue.size() == depth)
             {
-                if(retiredQueue.empty()){
-                    mutex.unlock();
-                    // 等待 get 操作完成
-                    co_await getNotifier.wait();
-                    co_await mutex.coLock();
-                }
+                
+                co_await condRetiredQueueNotEmpty.wait(mutex, [&]{ return !retiredQueue.empty(); });
+                
                 b.blockTimestamp = retiredQueue.front();
                 retiredQueue.pop();
             }
             payloadQueue.push(std::make_pair(b.blockTimestamp, p));
-            condNotEmpty.notifyAll();
+            condPayloadQueueNotEmpty.notifyAll();
             mutex.unlock();
         };
 
-        async_simple::coro::Lazy<PayloadType> get(AlwaysBlock &b){
+        async_simple::coro::Lazy<PayloadType> get(AlwaysBlock &b, int outIdx){
             co_await mutex.coLock();
+
+            co_await condNextOutput.wait(mutex, [&]{ return !signInSheet[outIdx]; });
+            signInSheet[outIdx] = true; 
+
             // 检查队列是否为空
-            if (payloadQueue.empty()){
-                co_await condNotEmpty.wait(mutex, [&]{ return !payloadQueue.empty(); });
-            }
+            co_await condPayloadQueueNotEmpty.wait(mutex, [&]{ return !payloadQueue.empty(); });
+            
             // 读取队列
             std::pair<long, PayloadType> tAndp = payloadQueue.front();
 
@@ -94,18 +97,29 @@ namespace wolf_sim
 
             outputCounter += 1;
             if(outputCounter < outPortNr){
-                mutex.unlock();
-                co_await outputDoneNotifier.wait();
+                // 等待所有 consumer 都准备好提取数据
+                co_await condConsumerBlockNotReady.wait(mutex, [&]{ return consumerBlockReady; });
+                // 互斥执行，防止多个 consumer 同时减少 outputCounter
+                outputCounter--;
+                b.blockTimestamp = regGetTimestamp;
+                if(outputCounter == 0){ // 最后一个被唤醒的 consumer 负责将 consumerBlockReady 置为 false
+                    consumerBlockReady = false;
+                    signInSheet.assign(signInSheet.size(), false);
+                    payloadQueue.pop(); // 将 payloadQueue 出队
+                    retiredQueue.push(regGetTimestamp); // 将 regGetTimestamp 入队
+                    condRetiredQueueNotEmpty.notifyAll(); // 通知 Producer 有新的 retired
+                    condNextOutput.notifyAll(); // 通知所有 consumer 有新的 output
+                }
             } else {
-               outputCounter = 0;
-               payloadQueue.pop();
-               retiredQueue.push(regGetTimestamp);
-               getNotifier.notify();
-               outputDoneNotifier.notify(); 
-               mutex.unlock();
+                // 最后一个请求的 consumer 负责将 consumerBlockReady 置为 true
+                consumerBlockReady = true;
+                outputCounter--;
+                b.blockTimestamp = regGetTimestamp;
+                condConsumerBlockNotReady.notifyAll();
             }
 
-            b.blockTimestamp = regGetTimestamp;
+            
+            mutex.unlock();
             co_return tAndp.second;
         };
 
@@ -125,21 +139,22 @@ namespace wolf_sim
         private:
             Register<PayloadType, depth> *regPtr;
             AlwaysBlock *blockPtr;
+            int outIdx;
         public:
             void asInput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
                 regPtr = regPtr_;
-                regPtr->addOutput();
+                outIdx = regPtr->addOutput();
             }
             void asOutput(AlwaysBlock* blockPtr_, Register<PayloadType, depth>* regPtr_){
                 blockPtr = blockPtr_;
                 regPtr = regPtr_;
             }
             async_simple::coro::Lazy<void> put(PayloadType p){
-                co_await regPtr->put(*blockPtr, p);
+                return regPtr->put(*blockPtr, p);
             }
             async_simple::coro::Lazy<PayloadType> get(){
-                co_return co_await regPtr->get(*blockPtr);
+                return regPtr->get(*blockPtr, outIdx);
             }
             async_simple::coro::Lazy<bool> nonBlockPut(PayloadType p){
                 co_return co_await regPtr->nonBlockPut(*blockPtr, p);
