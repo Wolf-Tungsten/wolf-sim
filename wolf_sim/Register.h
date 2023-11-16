@@ -123,12 +123,6 @@ namespace wolf_sim
             co_return tAndp.second;
         };
 
-        async_simple::coro::Lazy<bool> nonBlockPut(AlwaysBlock &b, PayloadType p){
-            co_return false;
-        };
-        async_simple::coro::Lazy<bool> nonBlockGet(AlwaysBlock &b, PayloadType &pRet){
-            co_return false;
-        };
     };
 
     template <typename PayloadType, int depth>
@@ -156,12 +150,20 @@ namespace wolf_sim
             async_simple::coro::Lazy<PayloadType> get(){
                 return regPtr->get(*blockPtr, outIdx);
             }
-            async_simple::coro::Lazy<bool> nonBlockPut(PayloadType p){
-                co_return co_await regPtr->nonBlockPut(*blockPtr, p);
+            async_simple::coro::Lazy<void> asyncPut(PayloadType p){
+                // 进行 put，但是不按照 put 过程更新 block 的时间戳
+                // 在仿真语义上，asyncPut 不推进时间戳
+                long t = blockPtr->blockTimestamp;
+                co_await regPtr->put(*blockPtr, p);
+                blockPtr->blockTimestamp = t;
+                co_return;
             }
-            async_simple::coro::Lazy<bool> nonBlockGet(PayloadType &pRet){
-                co_return co_await regPtr->nonBlockGet(*blockPtr, pRet);
-            } 
+            async_simple::coro::Lazy<PayloadType> asyncGet(){
+                long t = blockPtr->blockTimestamp;
+                auto payload = co_await regPtr->get(*blockPtr, outIdx);
+                blockPtr->blockTimestamp = t;
+                co_return payload;
+            }
     };
 }
 #endif // WOLF_SIM_REGISTER_H
