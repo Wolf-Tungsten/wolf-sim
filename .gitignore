@@ -1,2 +1,10 @@
 cmake-build-debug/
 build/
+csrc/
+simv.daidir/
+verdiLog/
+simv
+ucli.key
+vc_hdrs.h
+vcs_comp.log
+vcs_sim.log
