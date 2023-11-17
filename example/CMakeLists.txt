@@ -1,2 +1,6 @@
 add_executable(consumer_producer consumer_producer.cpp)
 target_link_libraries(consumer_producer wolf_sim)
+
+add_executable(ramulator_case ramulator_case.cpp)
+target_link_libraries(ramulator_case wolf_sim)
+target_compile_definitions(ramulator_case PRIVATE RAMULATOR)

@@ -71,6 +71,9 @@
         "csignal": "cpp",
         "forward_list": "cpp",
         "unordered_set": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp",
+        "source_location": "cpp"
     }
 }

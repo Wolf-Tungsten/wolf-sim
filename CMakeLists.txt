@@ -8,13 +8,10 @@ set(ASYNC_SIMPLE_ENABLE_TESTS OFF)
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ramulator/src)
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wolf_sim/connector)
 set(ASYNC_SIMPLE_BUILD_DEMO_EXAMPLE OFF)
 
-
 file(GLOB_RECURSE RAMULATOR_SRC "ramulator/src/*.cpp")
-
-
 
 add_library(ramulator STATIC ${RAMULATOR_SRC})
 
@@ -24,4 +21,5 @@ add_subdirectory(wolf_sim)
 
 add_subdirectory(example)
 
+# add_definitions(-DRAMULATOR)
 target_compile_definitions(ramulator PRIVATE RAMULATOR)
