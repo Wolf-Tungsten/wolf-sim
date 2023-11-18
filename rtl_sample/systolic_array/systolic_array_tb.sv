@@ -140,7 +140,7 @@ module systolic_array_tb;
                 dut_feature_in[col*WIDTH +: WIDTH] = feature_in[i][col];
             end
             @(negedge clk);
-            $display("i=%d, dut_result_out[0]=%d\n", i, dut_result_out[WIDTH-1:0]);
+            // $display("i=%d, dut_result_out[0]=%d\n", i, dut_result_out[WIDTH-1:0]);
             if(i >= M_SIZE-1) begin
                 for(col = 0; col < M_SIZE; col = col + 1) begin
                     if(dut_result_out[col*WIDTH +: WIDTH] !== golden_result_out[i-M_SIZE+1][col]) begin
@@ -150,7 +150,7 @@ module systolic_array_tb;
                 end
             end
         end
-        $display("Success!");
+        $display("Simulation finished successfully!");
         $finish;
     end
 

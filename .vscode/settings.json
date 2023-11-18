@@ -72,5 +72,6 @@
         "forward_list": "cpp",
         "unordered_set": "cpp",
         "future": "cpp"
-    }
+    },
+    "C_Cpp.default.compilerPath": "/opt/rh/devtoolset-10/root/usr/bin/g++"
 }

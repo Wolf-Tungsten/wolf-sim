@@ -1,2 +1,2 @@
-add_executable(consumer_producer consumer_producer.cpp)
-target_link_libraries(consumer_producer wolf_sim)
+add_executable(systolic_array systolic_array.cpp)
+target_link_libraries(systolic_array wolf_sim)

@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) consumer_producer",
+            "name": "(gdb) systolic_array",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/example/consumer_producer",
+            "program": "${workspaceFolder}/build/example/systolic_array",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
