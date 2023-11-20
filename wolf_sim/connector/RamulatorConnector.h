@@ -51,7 +51,7 @@ class RamulatorConnector: public wolf_sim::AlwaysBlock {
             ramulator::Config configs(configname);
             const std::string& standard = configs["standard"];
             assert(standard != "" || "DRAM standard should be specified.");
-
+            configs.set_core_num(1);
             void* ret = initMemory(standard,configs);
 
             if (standard == "DDR3") {
@@ -97,7 +97,6 @@ class RamulatorConnector: public wolf_sim::AlwaysBlock {
               ramulator::TLDRAM* spec = static_cast<ramulator::TLDRAM*>(ret);
               co_await after <ramulator::TLDRAM>(configs,spec);
             }
-
             
         }
 
@@ -126,25 +125,55 @@ class RamulatorConnector: public wolf_sim::AlwaysBlock {
             
             long getAddr = 0;
             ramulator::Request::Type getType = ramulator::Request::Type::READ;
-            map<int, int> latencies; //kv对，k&v are both int
-            auto read_complete = [&latencies](ramulator::Request& r){latencies[r.depart - r.arrive]++;}; 
-            ramulator::Request req(getAddr, getType, read_complete);
-
+            // map<int, int> latencies; //kv对，k&v are both int
+            // auto read_complete = [&latencies](ramulator::Request& r){latencies[r.depart - r.arrive]++;};
+            std::pair<long, ramulator::Request::Type> testInstr ={0x696fed40,ramulator::Request::Type::READ};
+            get_dramtrace_request(testInstr,getAddr,getType);
+            int is_write = (getType == ramulator::Request::Type::WRITE);
+            
+            auto read_complete = [](ramulator::Request& r){
+                                    std::cout<<"complete" <<std::endl; 
+                                    };
+            ramulator::Request myreq(getAddr, getType, read_complete);
+            // ramulator::Request req(getAddr, getType);
+            bool success = 0;
             while (1) {
+              if(getAddr < 1768942913 + 5){
+              getAddr++;
+              std::cout<<"now get instr--addr :"<<getAddr<< " type :"<< is_write <<std::endl;
+              // get_dramtrace_request(testInstr,getAddr,getType); 
+              success = memory.send(myreq);
+              }
               //get req in reg               
                 // auto inTrace = co_await reg_in.get();
                 // addr = inTrace.first;
                 // type = inTrace.second;
-                getAddr = 0x7876af80;
               //通过tick推进时间，同时记录时间戳
-                memory.send(req);
+                // success = memory.send(myreq);
+                // trace.get_dramtrace_request(getAddr, getType);
+                
               //结束了要put回去(async_put)
                 // auto payload = co_await reg_out.asyncPut();
                 memory.tick();
                 blockTimestamp ++;
+                // std::cout<< "end one loop"<<std::endl; 
                 // auto payload = co_await reg.get();
-                if(blockTimestamp=10) break;
+                if(blockTimestamp==1000) break;
             }
+            memory.finish();
+            co_return ;
+        }
+
+
+        bool get_dramtrace_request(std::pair<long, ramulator::Request::Type>& input_instr,long& req_addr, ramulator::Request::Type& req_type)
+        {
+            req_addr = input_instr.first;
+            if (input_instr.second == ramulator::Request::Type::READ )
+                req_type = ramulator::Request::Type::READ;
+            else if (input_instr.second == ramulator::Request::Type::WRITE)
+                req_type = ramulator::Request::Type::WRITE;
+            else assert(false);
+            return true;
         }
         
 
@@ -172,7 +201,8 @@ class RamulatorConnector: public wolf_sim::AlwaysBlock {
         // }
 
 
-        ~RamulatorConnector() {///ramulator::Memory<T, ramulator::Controller>& memory
+        ~RamulatorConnector() {
+            ///ramulator::Memory<T, ramulator::Controller>& memory
             // memory.finish();//finish the memory 析构函数不能有参数，那我怎么知道它要释放那些空间呢
             std::cout << "clk cycle: "<< blockTimestamp << std::endl;
             std::cout << "RamulatorConnector destructed" << std::endl;

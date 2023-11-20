@@ -4,11 +4,36 @@
     // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "(gdb) consumer_producer",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/example/consumer_producer",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [{"name":"LD_PRELOAD","value":"/usr/lib64/libasan.so.6"}],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "为 gdb 启用整齐打印",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "将反汇编风格设置为 Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) ramulator_case",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/example/ramulator_case",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

@@ -9,22 +9,23 @@ class Producer : public wolf_sim::AlwaysBlock {
 private:
     wolf_sim::RegRef<std::pair<long, ramulator::Request::Type>, 10> reg;
     int delay;
+
 public:
     Producer(wolf_sim::Register <std::pair<long, ramulator::Request::Type>, 10> &reg_, int delay_) : delay(delay_) {
         reg.asOutput(this, &reg_);
     }
 
     wolf_sim::ReturnNothing always() override {
-        long payload =0;
+        long payload = 0;
         std::pair<long, ramulator::Request::Type> instr;
         instr.first = payload;
-        instr.second = ramulator::Request::Type::WRITE;
-        while (1) {
-            //std::cout << "Producer try to put " << payload << " at " << blockTimestamp << std::endl;
+        instr.second = ramulator::Request::Type::READ;
+        while (1) {     
+            std::cout << "Producer try to put " << payload << " at " << blockTimestamp << std::endl;
             blockTimestamp += delay;
             co_await reg.put(instr);
-            //std::cout << "Producer put " << payload << " at " << blockTimestamp << std::endl;
-            payload++;
+            std::cout << "Producer put " << payload << " at " << blockTimestamp << std::endl;
+            payload+=64;
         }
         std::cout << "Producer" <<" finished at:" << blockTimestamp << std::endl;
     }

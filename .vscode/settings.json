@@ -74,6 +74,7 @@
         "future": "cpp",
         "any": "cpp",
         "codecvt": "cpp",
-        "source_location": "cpp"
+        "source_location": "cpp",
+        "*.ipp": "cpp"
     }
 }
