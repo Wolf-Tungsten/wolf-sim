@@ -1,2 +1,5 @@
 add_executable(systolic_array systolic_array.cpp)
 target_link_libraries(systolic_array wolf_sim)
+
+add_executable(bit_serial_mul bit_serial_mul.cpp)
+target_link_libraries(bit_serial_mul wolf_sim)
