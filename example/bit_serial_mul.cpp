@@ -165,8 +165,8 @@ int main() {
     std::vector<int> aVec;
     std::vector<int> xVec;
     for(int i = 0; i < 1024; i++) {
-        aVec.push_back(rand() % (1<<15));
-        xVec.push_back(rand() % (1<<15));
+        aVec.push_back(rand() % (1<<10));
+        xVec.push_back(rand() % (1<<10));
     }
     BitSerialMultiplier bsm(aVec, xVec, env, 16);
     env.run();
