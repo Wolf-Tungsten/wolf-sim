@@ -6,19 +6,24 @@
 #define WOLF_SIM_ENVIRONMENT_H
 #include <vector>
 #include <memory>
-#include "AlwaysBlock.h"
-#include "async_simple/coro/Lazy.h"
+#include "wolf_sim.h"
 
 namespace wolf_sim {
+
     class Environment {
     private:
         int threadNum;
-        std::vector<std::shared_ptr<AlwaysBlock>> alwaysBlockVec;
+        std::vector<std::shared_ptr<AlwaysBlock>> alwaysBlockPtrVec;
         bool running;
         async_simple::coro::Lazy<void> coroStart();
+        void addBlock(std::shared_ptr<AlwaysBlock> blockPtr);
     public:
         Environment(int _threadNum);
-        void addAlwaysBlock(std::shared_ptr<AlwaysBlock> alwaysBlockPtr);
+        template<typename TopBlockType> void createTopBlock(){   
+            auto topBlockPtr = std::make_shared<TopBlockType>();
+            topBlockPtr -> construct(); /*从这里开始递归构造整个模块树*/
+            addBlock(topBlockPtr);
+        };
         void run();
     };
 }

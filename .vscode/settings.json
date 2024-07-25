@@ -71,6 +71,18 @@
         "csignal": "cpp",
         "forward_list": "cpp",
         "unordered_set": "cpp",
-        "future": "cpp"
-    }
+        "future": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp",
+        "source_location": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp"
+    },
+    "C_Cpp.default.cppStandard": "gnu++20",
+    "C_Cpp.clang_format_fallbackStyle": "GNU",
+    "C_Cpp.clang_format_style": "GNU",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.block": "sameLine",
+    "C_Cpp.vcFormat.newLine.beforeElse": false,
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.function": "sameLine",
+    "C_Cpp.default.enableConfigurationSquiggles": true
 }

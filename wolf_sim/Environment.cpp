@@ -7,27 +7,35 @@
 #include "async_simple/coro/SyncAwait.h"
 #include "async_simple/coro/Collect.h"
 
-wolf_sim::Environment::Environment(int _threadNum) : threadNum(_threadNum){
-    running = false;
-}
+namespace wolf_sim
+{
+    Environment::Environment(int _threadNum) : threadNum(_threadNum) {};
+   
 
-void wolf_sim::Environment::addAlwaysBlock(std::shared_ptr<AlwaysBlock> alwaysBlockPtr) {
-    if(running){
-        throw std::runtime_error("Not allowed to add always block when simulation is running");
+    void Environment::addBlock(std::shared_ptr<AlwaysBlock> blockPtr)
+    {
+        alwaysBlockPtrVec.push_back(blockPtr);
+        for (const auto &internalBlockPair : blockPtr->internalAlwaysBlockMap)
+        {
+            addBlock(internalBlockPair.second);
+        }
     }
-    alwaysBlockVec.push_back(alwaysBlockPtr);
-}
 
-async_simple::coro::Lazy<void> wolf_sim::Environment::coroStart() {
-    std::vector<async_simple::coro::Lazy<void>> alwaysCoroVec;
-    for(auto alwaysBlockPtr: alwaysBlockVec){
-        alwaysCoroVec.push_back(alwaysBlockPtr->always());
+    async_simple::coro::Lazy<void> Environment::coroStart()
+    {
+        std::vector<async_simple::coro::Lazy<void>> alwaysCoroVec;
+        for (auto alwaysBlockPtr : alwaysBlockPtrVec)
+        {
+            alwaysCoroVec.push_back(alwaysBlockPtr->simulationLoop());
+        }
+        co_await async_simple::coro::collectAllPara(std::move(alwaysCoroVec));
+        co_return;
     }
-    co_await async_simple::coro::collectAllPara(std::move(alwaysCoroVec));
-    co_return;
-}
 
-void wolf_sim::Environment::run() {
-    async_simple::executors::SimpleExecutor executor(threadNum);
-    syncAwait(coroStart().via(&executor));
-}
+    void wolf_sim::Environment::run()
+    {
+        async_simple::executors::SimpleExecutor executor(threadNum);
+        syncAwait(coroStart().via(&executor));
+    }
+};
+
