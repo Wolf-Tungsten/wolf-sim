@@ -16,14 +16,18 @@
 
 namespace wolf_sim {
 
-    class AlwaysBlock {
+    class AlwaysBlock : public std::enable_shared_from_this<AlwaysBlock> {
     public:
         void assignInput(int id, std::shared_ptr<Register> regPtr);
         void assignOutput(int id, std::shared_ptr<Register> regPtr);
         virtual void construct(){};
         friend class Environment;
+        void setNameAndParent(std::string _name, std::weak_ptr<AlwaysBlock> _parentPtr);
     
     protected:
+        std::string name;
+        std::weak_ptr<AlwaysBlock> parentPtr;
+
         Time_t fireTime;
         std::map<int, std::any> inputRegPayload;
         std::vector<std::any> wakeUpPayload;
@@ -40,7 +44,9 @@ namespace wolf_sim {
             }
             auto p = std::make_shared<AlwaysBlockDerivedType>();
             internalAlwaysBlockMap[name] = p;
+            std::cout << "createAlwaysBlock: " << name << std::endl;
             p -> construct();
+            p -> setNameAndParent(name, shared_from_this());
             return p;
         };
         std::shared_ptr<Register> createRegister(std::string name = "");

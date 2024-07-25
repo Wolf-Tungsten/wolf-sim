@@ -2,7 +2,11 @@
 
 namespace wolf_sim {
 
-
+    void AlwaysBlock::setNameAndParent(std::string _name, std::weak_ptr<AlwaysBlock> _parentPtr){
+        name = _name;
+        parentPtr = _parentPtr;
+    }
+    
     void AlwaysBlock::assignInput(int id, std::shared_ptr<Register> reg) {
         inputRegisterMap[id] = reg;
         reg -> connectAsInput(this);
@@ -106,7 +110,12 @@ namespace wolf_sim {
             fireTime = minTime;
             /* 如果有 payload 就 fire */
             if(!inputRegPayload.empty() || !wakeUpPayload.empty()){
-                fire();
+                try {
+                    fire();
+                } catch (const std::exception& e){
+                    std::cerr << "Exception caught in AlwaysBlock fire: " << e.what() << std::endl;
+                    exit(1);
+                }
             }
             /* 将 fire 产生的结果写出 */
             for(const auto& outputRegPair: outputRegisterMap){
