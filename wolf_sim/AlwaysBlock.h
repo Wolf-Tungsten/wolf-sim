@@ -131,6 +131,10 @@ namespace wolf_sim {
     private:
         Time_t internalFireTime = 0;
         ReturnNothing simulationLoop();
+        #if OPT_OPTIMISTIC_READ
+        std::map<int, Time_t> inputRegActiveTimeOptimistic;
+        std::map<int, bool> inputRegLockedOptimistic;
+        #endif
         std::map<std::string, std::shared_ptr<Register>> internalRegisterMap;
         std::map<std::string, std::shared_ptr<AlwaysBlock>> internalAlwaysBlockMap;
         std::map<int, std::pair<std::any, bool>> pendingRegisterWrite;

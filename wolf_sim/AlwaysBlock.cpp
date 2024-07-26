@@ -56,10 +56,23 @@ namespace wolf_sim {
         !registerWriteSchedule.empty()){
             /* 计算最小唤醒时间 */
             Time_t minTime = MAX_TIME;
+            #if OPT_OPTIMISTIC_READ
+            inputRegLockedOptimistic.clear();
+            #endif
             for(const auto& inputRegPair : inputRegisterMap){
+                int regId = inputRegPair.first;
                 auto regPtr = inputRegPair.second;
+                #if OPT_OPTIMISTIC_READ
+                if(inputRegActiveTimeOptimistic.contains(regId) && inputRegActiveTimeOptimistic[regId] > minTime){
+                    continue;
+                }
+                #endif
                 co_await regPtr->acquireRead();
                 Time_t regActiveTime = regPtr -> getActiveTime();
+                #if OPT_OPTIMISTIC_READ
+                inputRegLockedOptimistic[regId] = true;
+                inputRegActiveTimeOptimistic[regId] = regActiveTime;
+                #endif
                 if(regActiveTime < minTime){
                     minTime = regActiveTime;
                 }
@@ -79,6 +92,12 @@ namespace wolf_sim {
             /* 构造传给 fire 的 payload 列表 */
             inputRegPayload.clear();
             for(const auto& inputRegPair: inputRegisterMap){
+                #if OPT_OPTIMISTIC_READ
+                int regId = inputRegPair.first;
+                if(!inputRegLockedOptimistic.contains(regId)){
+                    continue;
+                }
+                #endif
                 auto regPtr = inputRegPair.second;
                 Time_t regActiveTime = regPtr -> getActiveTime();
                 std::any payload = regPtr -> read();

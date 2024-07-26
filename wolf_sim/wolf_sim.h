@@ -8,6 +8,8 @@
 #include "async_simple/coro/Mutex.h"
 #include "async_simple/coro/ConditionVariable.h"
 
+#define OPT_OPTIMISTIC_READ 0
+
 namespace wolf_sim {
     using Time_t = uint64_t;
     const Time_t MAX_TIME = std::numeric_limits<Time_t>::max();
