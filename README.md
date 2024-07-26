@@ -2,7 +2,7 @@
 
 ## 三个组件
 
-### AlwaysBlock
+### Module
 
 ### Register
 
@@ -10,10 +10,10 @@
 
 ## 如何构建一个仿真模型
 
-### 1. 创建自定义的 AlwaysBlock
+### 1. 创建自定义的 Module
 
 ```cpp
-class MyAlwaysBlock : public AlwaysBlock {
+class MyModule : public Module {
     /** Part 1 端口声明 **/
     IPort(port1, int); /**声明一个名称为 port1，数据类型为 int 的输入端口**/
     IPort(port2, bool); /**声明一个名称为 port2，数据类型为 bool 的输入端口**/
@@ -37,7 +37,7 @@ class MyAlwaysBlock : public AlwaysBlock {
    FromChildPortArray(name, type, size);
    void construct() {
         /** 创建子模块 **/
-        auto childBlockP = createChildBlock<ChildBlockType>();
+        auto childBlockP = createChildModule<ChildBlockType>();
         /** 创建一个寄存器并连接到子模块的端口 **/
         auto reg = createRegister();
         childBlockP -> xxxConnect(reg);

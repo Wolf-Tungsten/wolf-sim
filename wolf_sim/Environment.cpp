@@ -12,10 +12,10 @@ namespace wolf_sim
     Environment::Environment(int _threadNum) : threadNum(_threadNum) {};
    
 
-    void Environment::addBlock(std::shared_ptr<AlwaysBlock> blockPtr)
+    void Environment::addBlock(std::shared_ptr<Module> blockPtr)
     {
-        alwaysBlockPtrVec.push_back(blockPtr);
-        for (const auto &internalBlockPair : blockPtr->internalAlwaysBlockMap)
+        modulePtrVec.push_back(blockPtr);
+        for (const auto &internalBlockPair : blockPtr->childModuleMap)
         {
             addBlock(internalBlockPair.second);
         }
@@ -24,9 +24,9 @@ namespace wolf_sim
     async_simple::coro::Lazy<void> Environment::coroStart()
     {
         std::vector<async_simple::coro::Lazy<void>> alwaysCoroVec;
-        for (auto alwaysBlockPtr : alwaysBlockPtrVec)
+        for (auto modulePtr : modulePtrVec)
         {
-            alwaysCoroVec.push_back(alwaysBlockPtr->simulationLoop());
+            alwaysCoroVec.push_back(modulePtr->simulationLoop());
         }
         co_await async_simple::coro::collectAllPara(std::move(alwaysCoroVec));
         co_return;

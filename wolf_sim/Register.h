@@ -5,7 +5,7 @@
 #ifndef WOLF_SIM_REGISTER_H
 #define WOLF_SIM_REGISTER_H
 #include <vector>
-#include <queue>
+#include <deque>
 #include <map>
 #include <utility>
 #include <iostream>
@@ -23,26 +23,28 @@ namespace wolf_sim
         // 禁止拷贝
         Register(const Register &r) = delete;
         Register &operator=(const Register &r) = delete;
-        void connectAsInput(std::weak_ptr<AlwaysBlock> blockPtr);
-        void connectAsOutput(std::weak_ptr<AlwaysBlock> blockPtr);
-        // 寄存器支持的操作
+        void connectAsInput(std::weak_ptr<Module> modulePtr);
+        void connectAsOutput(std::weak_ptr<Module> modulePtr);
+        // 寄存器读操作
         ReturnNothing acquireRead();
-        void releaseRead();
         Time_t getActiveTime();
+        bool hasTerminated();
         std::any read();
-        void clear();
-        ReturnNothing write(Time_t _writeTime, std::any _payload=std::any(), bool overwrite=false);
+        void pop();
+        void releaseRead();
+        // 寄存器写操作
+        ReturnNothing write(Time_t _writeTime, std::any _payload=std::any());
+        ReturnNothing terminate(Time_t _writeTime);
     private:
         bool asInputConnected;
         bool asOutputConnected;
-        std::weak_ptr<AlwaysBlock> outputToPtr;
-        std::weak_ptr<AlwaysBlock> inputFromPtr;
-        bool active;
-        std::atomic<Time_t> activeTime;
-        std::any payload;
+        std::weak_ptr<Module> outputToPtr;
+        std::weak_ptr<Module> inputFromPtr;
+        std::deque<std::pair<Time_t, std::any>> payloadQueue;
+        Time_t lastWriteTime;
+        bool terminated;
         async_simple::coro::Mutex mutex;
         async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condWaitActive;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condWaitInactive;
     };
 }
 #endif // WOLF_SIM_REGISTER_H

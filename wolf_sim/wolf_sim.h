@@ -16,11 +16,11 @@ namespace wolf_sim {
     using ReturnNothing = async_simple::coro::Lazy<>;
     class Register;
     class Environment;
-    class AlwaysBlock;
+    class Module;
 }
 
 #include "Register.h"
-#include "AlwaysBlock.h"
+#include "Module.h"
 #include "Environment.h"
 
 

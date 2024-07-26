@@ -13,10 +13,10 @@ namespace wolf_sim {
     class Environment {
     private:
         int threadNum;
-        std::vector<std::shared_ptr<AlwaysBlock>> alwaysBlockPtrVec;
+        std::vector<std::shared_ptr<Module>> modulePtrVec;
         bool running;
         async_simple::coro::Lazy<void> coroStart();
-        void addBlock(std::shared_ptr<AlwaysBlock> blockPtr);
+        void addBlock(std::shared_ptr<Module> blockPtr);
     public:
         Environment(int _threadNum);
         template<typename TopBlockType> void createTopBlock(){   

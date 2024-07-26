@@ -3,8 +3,8 @@
 // Created by gaoruihao on 6/23/23.
 //
 
-#ifndef WOLF_SIM_ALWAYSBLOCK_H
-#define WOLF_SIM_ALWAYSBLOCK_H
+#ifndef WOLF_SIM_MODULE_H
+#define WOLF_SIM_MODULE_H
 #include <memory>
 #include <map>
 #include <string>
@@ -47,7 +47,8 @@
         }; \
     };
 
-#define IPortArrayOperation(name, type) \
+#define IPortArrayOperation(name, type, arraySize) \
+    int name##Size = arraySize; \
     std::function<bool(int)> name##HasValue; \
     std::function<type(int)> name##Read;
 
@@ -59,14 +60,18 @@
         name##Write = [this, id](type value){ \
             writeRegister(id, value); \
         }; \
-        name##WriteEnhanced = [this, id](type value, int delay, bool overwrite){ \
-            writeRegister(id, value, delay, overwrite); \
+        name##WriteDelay = [this, id](type value, wolf_sim::Time_t delay){ \
+            writeRegister(id, value, delay); \
+        }; \
+        name##Terminate = [this, id](wolf_sim::Time_t delay){ \
+            writeRegister(id, std::any(), delay, true); \
         }; \
     };
 
 #define OPortOperation(name, type) \
     std::function<void(type)> name##Write; \
-    std::function<void(type, int, bool)> name##WriteEnhanced;
+    std::function<void(type, wolf_sim::Time_t)> name##WriteDelay; \
+    std::function<void(wolf_sim::Time_t)> name##Terminate;
 
 #define OPortArrayConnect(name, type, arraySize) \
     void name##Connect(std::vector<std::shared_ptr<wolf_sim::Register>> regVec){ \
@@ -78,14 +83,19 @@
         name##Write = [this, id](int idx, type value){ \
             writeRegister(id+idx, value); \
         }; \
-        name##WriteEnhanced = [this, id](int idx, type value, int delay, bool overwrite){ \
-            writeRegister(id+idx, value, delay, overwrite); \
+        name##WriteDelay = [this, id](int idx, type value, int delay){ \
+            writeRegister(id+idx, value, delay); \
+        }; \
+        name##Terminate = [this, id](int idx, wolf_sim::Time_t delay){ \
+            writeRegister(id+idx, std::any(), delay, true); \
         }; \
     };
 
-#define OPortArrayOperation(name, type) \
+#define OPortArrayOperation(name, type, arraySize) \
+    int name##Size = arraySize; \
     std::function<void(int, type)> name##Write; \
-    std::function<void(int, type, int, bool)> name##WriteEnhanced;
+    std::function<void(int, type, wolf_sim::Time_t)> name##WriteDelay; \
+    std::function<void(int, wolf_sim::Time_t)> name##Terminate;
 
 #define IPort(name, type) \
     public: \
@@ -97,7 +107,7 @@
     public: \
         IPortArrayConnect(name, type, arraySize)\
     private: \
-        IPortArrayOperation(name, type)
+        IPortArrayOperation(name, type, arraySize)
 
 #define  OPort(name, type) \
     public: \
@@ -109,7 +119,7 @@
     public: \
         OPortArrayConnect(name, type, arraySize)\
     private: \
-        OPortArrayOperation(name, type)
+        OPortArrayOperation(name, type, arraySize)
 
 #define FromChildPort(name, type) \
     private: \
@@ -119,7 +129,7 @@
 #define FromChildPortArray(name, type, arraySize) \
     private: \
         IPortArrayConnect(name, type, arraySize)\
-        IPortArrayOperation(name, type)
+        IPortArrayOperation(name, type, arraySize)
 
 #define  ToChildPort(name, type) \
     private: \
@@ -129,21 +139,21 @@
 #define ToChildPortArray(name, type, arraySize) \
     private: \
         OPortArrayConnect(name, type, arraySize)\
-        OPortArrayOperation(name, type)
+        OPortArrayOperation(name, type, arraySize)
 
 namespace wolf_sim {
 
-    class AlwaysBlock : public std::enable_shared_from_this<AlwaysBlock> {
+    class Module : public std::enable_shared_from_this<Module> {
     public:
         void assignInput(int id, std::shared_ptr<Register> regPtr);
         void assignOutput(int id, std::shared_ptr<Register> regPtr);
         virtual void construct(){};
         friend class Environment;
-        void setNameAndParent(std::string _name, std::weak_ptr<AlwaysBlock> _parentPtr);
+        void setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr);
     
     protected:
         std::string name;
-        std::weak_ptr<AlwaysBlock> parentPtr;
+        std::weak_ptr<Module> parentPtr;
         std::map<int, std::shared_ptr<Register>> inputRegisterMap;
         std::map<int, std::shared_ptr<Register>> outputRegisterMap;
 
@@ -152,24 +162,24 @@ namespace wolf_sim {
         std::vector<std::any> wakeUpPayload;
         virtual void fire(){};
 
-        template<typename AlwaysBlockDerivedType>
-        std::shared_ptr<AlwaysBlockDerivedType> createChildBlock(std::string name = ""){
-            static_assert(std::is_base_of<AlwaysBlock, AlwaysBlockDerivedType>::value, "internal block must be derived from AlwaysBlock class");
+        template<typename ModuleDerivedType>
+        std::shared_ptr<ModuleDerivedType> createChildModule(std::string name = ""){
+            static_assert(std::is_base_of<Module, ModuleDerivedType>::value, "child module must be derived from Module class");
             if(name == ""){
-                name = std::string("anonymous_block_") + std::to_string(internalAlwaysBlockMap.size());
+                name = std::string("anonymous_block_") + std::to_string(childModuleMap.size());
             }
-            if(internalAlwaysBlockMap.contains(name)){
-                throw std::runtime_error("create AlwaysBlock name conflict!");
+            if(childModuleMap.contains(name)){
+                throw std::runtime_error("create Module name conflict!");
             }
-            auto p = std::make_shared<AlwaysBlockDerivedType>();
-            internalAlwaysBlockMap[name] = p;
+            auto p = std::make_shared<ModuleDerivedType>();
+            childModuleMap[name] = p;
             p -> construct();
             p -> setNameAndParent(name, shared_from_this());
             return p;
         };
         std::shared_ptr<Register> createRegister(std::string name = "");
         void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
-        void writeRegister(int id, std::any writePayload, Time_t delay=1, bool overwrite=false);
+        void writeRegister(int id, std::any writePayload, Time_t delay=1, bool terminate=false);
     
     private:
         Time_t internalFireTime = 0;
@@ -178,8 +188,9 @@ namespace wolf_sim {
         std::map<int, Time_t> inputRegActiveTimeOptimistic;
         std::map<int, bool> inputRegLockedOptimistic;
         #endif
-        std::map<std::string, std::shared_ptr<Register>> internalRegisterMap;
-        std::map<std::string, std::shared_ptr<AlwaysBlock>> internalAlwaysBlockMap;
+        std::vector<int> terminatedInputRegNote;
+        std::map<std::string, std::shared_ptr<Register>> childRegisterMap;
+        std::map<std::string, std::shared_ptr<Module>> childModuleMap;
         std::map<int, std::pair<std::any, bool>> pendingRegisterWrite;
         struct EarliestWakeUpComparator {
             bool operator()(const std::pair<Time_t, std::any>& p1, const std::pair<Time_t, std::any>& p2) {
@@ -193,9 +204,10 @@ namespace wolf_sim {
             }
         };
         std::priority_queue<std::tuple<Time_t, int, std::any, bool>, std::vector<std::tuple<Time_t, int, std::any, bool>>, EarliestRegisterWriteComparator> registerWriteSchedule;
+        std::map<int, Time_t> pendingRegisterTerminate;
     };
     
 }
 
 
-#endif //WOLF_SIM_ALWAYSBLOCK_H
+#endif //WOLF_SIM_MODULE_H

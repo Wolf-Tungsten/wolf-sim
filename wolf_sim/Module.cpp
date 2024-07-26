@@ -1,52 +1,52 @@
-#include "AlwaysBlock.h"
+#include "Module.h"
 
 namespace wolf_sim {
 
-    void AlwaysBlock::setNameAndParent(std::string _name, std::weak_ptr<AlwaysBlock> _parentPtr){
+    void Module::setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr){
         name = _name;
         parentPtr = _parentPtr;
     }
     
-    void AlwaysBlock::assignInput(int id, std::shared_ptr<Register> reg) {
+    void Module::assignInput(int id, std::shared_ptr<Register> reg) {
         inputRegisterMap[id] = reg;
         reg -> connectAsInput(shared_from_this());
     }
 
-    void AlwaysBlock::assignOutput(int id, std::shared_ptr<Register> reg){
+    void Module::assignOutput(int id, std::shared_ptr<Register> reg){
         outputRegisterMap[id] = reg;
         reg -> connectAsOutput(shared_from_this());
     }
  
-    std::shared_ptr<Register> AlwaysBlock::createRegister(std::string name){
+    std::shared_ptr<Register> Module::createRegister(std::string name){
         if(name == ""){
-            name = std::string("anonymous_reg_") + std::to_string(internalRegisterMap.size());
+            name = std::string("anonymous_reg_") + std::to_string(childRegisterMap.size());
         }
-        if(internalRegisterMap.contains(name)){
+        if(childRegisterMap.contains(name)){
             throw std::runtime_error("create Register name conflict!");
         }
         auto p = std::make_shared<Register>();
-        internalRegisterMap[name] = p;
+        childRegisterMap[name] = p;
         return p;
     }
 
-    void AlwaysBlock::planWakeUp(Time_t delay, std::any wakeUpPayload) {
+    void Module::planWakeUp(Time_t delay, std::any wakeUpPayload) {
         if(delay <= 0){
             throw std::runtime_error("delay should be positive");
         }
         wakeUpSchedule.push(std::make_pair(internalFireTime+delay, wakeUpPayload));
     }
 
-    void AlwaysBlock::writeRegister(int id, std::any writePayload, Time_t delay, bool overwrite){
+    void Module::writeRegister(int id, std::any writePayload, Time_t delay, bool terminate){
         if(delay < 0) {
            throw std::runtime_error("delay should not be negetive"); 
         } else if (delay == 0){
-           pendingRegisterWrite[id] = std::make_pair(writePayload, overwrite);
+           pendingRegisterWrite[id] = std::make_pair(writePayload, terminate);
         } else {
-           registerWriteSchedule.push(std::make_tuple(internalFireTime+delay, id, writePayload, overwrite));
+           registerWriteSchedule.push(std::make_tuple(internalFireTime+delay, id, writePayload, terminate));
         }
     }
 
-    ReturnNothing AlwaysBlock::simulationLoop(){
+    ReturnNothing Module::simulationLoop(){
         if(inputRegisterMap.empty()){
             /*对于没有输入寄存器的模块，给一个在0时刻启动的机会*/
             wakeUpSchedule.push(std::make_pair(0, std::any()));
@@ -67,8 +67,16 @@ namespace wolf_sim {
                     continue;
                 }
                 #endif
+                std::cout << "获取读锁" << std::endl;
                 co_await regPtr->acquireRead();
+                std::cout << "读锁获取成功" << std::endl;
+                if(regPtr->hasTerminated()){
+                    terminatedInputRegNote.push_back(regId); // 标记删除
+                    regPtr -> releaseRead();
+                    continue;
+                }
                 Time_t regActiveTime = regPtr -> getActiveTime();
+                std::cout << "激活时间" << regActiveTime << std::endl;
                 #if OPT_OPTIMISTIC_READ
                 inputRegLockedOptimistic[regId] = true;
                 inputRegActiveTimeOptimistic[regId] = regActiveTime;
@@ -77,6 +85,11 @@ namespace wolf_sim {
                     minTime = regActiveTime;
                 }
             }
+            // 根据 terminatedInputRegNote 删除已经终止的寄存器
+            for(const auto& id: terminatedInputRegNote){
+                inputRegisterMap.erase(id);
+            }
+            terminatedInputRegNote.clear();
             if(!wakeUpSchedule.empty()){
                 Time_t wakeUpTime = wakeUpSchedule.top().first;
                 if(wakeUpTime < minTime){
@@ -105,7 +118,7 @@ namespace wolf_sim {
                     if(payload.has_value()){
                         inputRegPayload[inputRegPair.first] = payload;
                     }
-                    regPtr -> clear();
+                    regPtr -> pop();
                 }
                 regPtr -> releaseRead();
             }
@@ -120,8 +133,8 @@ namespace wolf_sim {
                 const auto& regWriteTuple = registerWriteSchedule.top();
                 int id = std::get<1>(regWriteTuple);
                 std::any payload = std::get<2>(regWriteTuple);
-                bool overwrite = std::get<3>(regWriteTuple);
-                pendingRegisterWrite[id] = std::make_pair(payload, overwrite);
+                bool terminate = std::get<3>(regWriteTuple);
+                pendingRegisterWrite[id] = std::make_pair(payload, terminate);
                 registerWriteSchedule.pop();
             }
             /* 记录（可能的）fire 时间 */
@@ -132,7 +145,7 @@ namespace wolf_sim {
                 try {
                     fire();
                 } catch (const std::exception& e){
-                    std::cerr << "Exception caught in AlwaysBlock fire: " << e.what() << std::endl;
+                    std::cerr << "Exception caught in Module fire: " << e.what() << std::endl;
                     exit(1);
                 }
             }
@@ -142,14 +155,19 @@ namespace wolf_sim {
                 if(pendingRegisterWrite.contains(id)){
                     auto& writePair = pendingRegisterWrite[id];
                     std::any payload = writePair.first;
-                    bool overwrite = writePair.second;
-                    co_await outputRegPair.second -> write(internalFireTime, payload, overwrite);
+                    bool terminate = writePair.second;
+                    if(!terminate){
+                        co_await outputRegPair.second -> write(internalFireTime, payload);
+                    } else {
+                        co_await outputRegPair.second -> terminate(internalFireTime);
+                    }
                 } else {
                     /* 向所有没有写入的寄存器打入一个空的 time packet，
                     这里并不检查这些寄存器的 activeTime，交给 register 中的逻辑自动丢弃较小的 time packet */
-                    co_await outputRegPair.second -> write(internalFireTime, std::any(), false);
+                    co_await outputRegPair.second -> write(internalFireTime, std::any());
                 }
             }
         }
+        std::cout << "SimulatioLoopEnd" << std::endl;
     }
 }

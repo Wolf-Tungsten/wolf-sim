@@ -3,23 +3,25 @@
 #include <memory>
 #include <functional>
 
-class Producer : public wolf_sim::AlwaysBlock {
-    OPortArray(o, int, 10);
+class Producer : public wolf_sim::Module {
+    OPort(o, int);
     void fire(){
-        oWrite(0, 1);
+        oWrite((int)fireTime);
+        std::cout << "Producer Time= " << fireTime << ", Payload=" << fireTime << std::endl;
         if(fireTime <= 100){
             planWakeUp(5);
         } else {
-            oWrite(0, 114514);
+            oTerminate(0);
         }
     };
 };
 
-class Consumer : public wolf_sim::AlwaysBlock {
-    IPortArray(i, int, 10);
+class Consumer : public wolf_sim::Module {
+    IPort(i, int);
     void fire(){
-        if(iHasValue(0)){
-            std::cout << "Consumer Time= " << fireTime << ", Payload=" << iRead(0) << std::endl;
+        std::cout << "consumer" << std::endl;
+        if(iHasValue()){
+            std::cout << "Consumer Time= " << fireTime << ", Payload=" << iRead() << std::endl;
             std::cout << "Consumer 计划在 Time=" << fireTime+2 << "唤醒" << std::endl;
             planWakeUp(2, (int)fireTime);
         } else if (wakeUpPayload[0].has_value()){
@@ -28,18 +30,15 @@ class Consumer : public wolf_sim::AlwaysBlock {
     }
 };
 
-class ProducerConsumerSystem : public wolf_sim::AlwaysBlock {
+class ProducerConsumerSystem : public wolf_sim::Module {
     public:
     void construct(){
-        auto producer = createChildBlock<Producer>("producer");
-        auto consumer = createChildBlock<Consumer>("consumer");
-        auto regVec = std::vector<std::shared_ptr<wolf_sim::Register>>();
-        for(int i=0; i<10; i++){
-            regVec.push_back(createRegister());
-        }
+        auto producer = createChildModule<Producer>("producer");
+        auto consumer = createChildModule<Consumer>("consumer");
+        auto reg = createRegister("reg");
         //producer -> assignOutput(Producer::O::o, reg);
-        producer -> oConnect(regVec);
-        consumer -> iConnect(regVec);
+        producer -> oConnect(reg);
+        consumer -> iConnect(reg);
     }
 };
 
