@@ -1,29 +1,52 @@
-# Wolf Sim
+# Wolf-Sim：一个C++并行离散事件框架
 
-A lightweight coroutine-based discrete event simulation framework.
+## 三个组件
 
-基于协程的轻量级离散事件仿真框架
+### AlwaysBlock
 
-## 仿真模型：Register—Synchornized Simulation Model（RSSM）
+### Register
 
+### Environment
 
-仿真模型希望通过软件代码模仿数字电路运行的过程，获取运行的细节信息，以评估架构设计的有效性。
+## 如何构建一个仿真模型
 
-数字电路的运行过程可以抽象成一系列状态之间的转换，如果我们将外部输入也视为状态的一部分，则下一状态总是可以从上一状态唯一确定。
+### 1. 创建自定义的 AlwaysBlock
 
-在数字电路中，状态是保存在存储元件中的，因此，RSSM模型使用：
+```cpp
+class MyAlwaysBlock : public AlwaysBlock {
+    /** Part 1 端口声明 **/
+    IPort(port1, int); /**声明一个名称为 port1，数据类型为 int 的输入端口**/
+    IPort(port2, bool); /**声明一个名称为 port2，数据类型为 bool 的输入端口**/
+    OPort(port3, std::string); /**声明一个名称为 port3，数据类型为 std::string 的输出端口**/
+    OPort(port4, someCustomType); /**端口的类型可以是任何支持复制的类型**/
+    IPortArray(port5, int, 114); /**声明一个名称为 port5，数据类型为 int 的输入端口数组，长度为 114**/
+    OPortArray(port6, double, 514); /**声明一个名称为 port6，数据类型为 double 的输出端口数组，长度为 514**/
+    /** 什么时候使用端口数组？
+     * 如果 I/OPort(portName, std::vector<xxx>)，就能满足你的要求，那么不！要！使！用！端口数组
+     * 直接使用 I/OPort.
+     * 上述情况搞不定时才用 IPortArray / OPortArray
+    */
 
-- Register 建模所有状态相关的寄存器
-- AlwaysBlock 表达寄存器之间的交互关系
+   /** Part 2 建立子结构 **/
+   /** 模块可以拥有子结构，并且可以和子结构交互 
+    * 和子结构交互的端口，需要在这里声明 
+    * 向子结构写数据声明 To， 从子结构读数据声明 From**/
+   ToChildPort(name, type);
+   ToChildPortArray(name, type, size);
+   FromChildPort(name, type);
+   FromChildPortArray(name, type, size);
+   void construct() {
+        /** 创建子模块 **/
+        auto childBlockP = createChildBlock<ChildBlockType>();
+        /** 创建一个寄存器并连接到子模块的端口 **/
+        auto reg = createRegister();
+        childBlockP -> xxxConnect(reg);
+        /** 把寄存器连接到当前模块的内部端口 **/
+        xxxConnect(reg);
+   }
 
-## 寄存器 Register
-
-RSSM 中的寄存器具有：
-
-- 一个且仅有一个输入端口
-- 至少一个或多个输出端口
-
-不同于数字电路中的寄存器只能保存一个元素，RSSM中的寄存器可以具有深度，即可以保存多个元素，多个元素以FIFO规则进出寄存器。
+}
+```
 
 
 

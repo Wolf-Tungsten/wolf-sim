@@ -31,8 +31,8 @@ class Consumer : public wolf_sim::AlwaysBlock {
 class ProducerConsumerSystem : public wolf_sim::AlwaysBlock {
     public:
     void construct(){
-        auto producer = createAlwaysBlock<Producer>("producer");
-        auto consumer = createAlwaysBlock<Consumer>("consumer");
+        auto producer = createChildBlock<Producer>("producer");
+        auto consumer = createChildBlock<Consumer>("consumer");
         auto regVec = std::vector<std::shared_ptr<wolf_sim::Register>>();
         for(int i=0; i<10; i++){
             regVec.push_back(createRegister());

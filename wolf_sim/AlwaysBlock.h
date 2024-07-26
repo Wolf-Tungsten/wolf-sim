@@ -15,8 +15,7 @@
 #include <functional>
 #include "wolf_sim.h"
 
-#define IPort(name, type) \
-    public: \
+#define IPortConnect(name, type) \
     void name##Connect(std::shared_ptr<wolf_sim::Register> reg){ \
         int id = inputRegisterMap.size(); \
         inputRegisterMap[id] = reg; \
@@ -27,13 +26,13 @@
         name##Read = [this, id](){ \
             return std::any_cast<type>(inputRegPayload[id]); \
         }; \
-    } \
-    private: \
+    }; 
+
+#define IPortOperation(name, type) \
     std::function<bool()> name##HasValue; \
     std::function<type()> name##Read; 
 
-#define IPortArray(name, type, arraySize) \
-    public: \
+#define IPortArrayConnect(name, type, arraySize) \
     void name##Connect(std::vector<std::shared_ptr<wolf_sim::Register>> regVec){ \
         int id = inputRegisterMap.size(); \
         for(int i=0; i<arraySize; i++){ \
@@ -46,13 +45,13 @@
         name##Read = [this, id](int idx){ \
             return std::any_cast<type>(inputRegPayload[id+idx]); \
         }; \
-    } \
-    private: \
+    };
+
+#define IPortArrayOperation(name, type) \
     std::function<bool(int)> name##HasValue; \
     std::function<type(int)> name##Read;
 
-#define  OPort(name, type) \
-    public: \
+#define OPortConnect(name, type) \
     void name##Connect(std::shared_ptr<wolf_sim::Register> reg){ \
         int id = outputRegisterMap.size(); \
         outputRegisterMap[id] = reg; \
@@ -63,13 +62,13 @@
         name##WriteEnhanced = [this, id](type value, int delay, bool overwrite){ \
             writeRegister(id, value, delay, overwrite); \
         }; \
-    } \
-    private: \
-    std::function<void(type)> name##Write; \
-    std::function<void(type, int, bool)> name##WriteEnhanced; 
+    };
 
-#define OPortArray(name, type, arraySize) \
-    public: \
+#define OPortOperation(name, type) \
+    std::function<void(type)> name##Write; \
+    std::function<void(type, int, bool)> name##WriteEnhanced;
+
+#define OPortArrayConnect(name, type, arraySize) \
     void name##Connect(std::vector<std::shared_ptr<wolf_sim::Register>> regVec){ \
         int id = outputRegisterMap.size(); \
         for(int i=0; i<arraySize; i++){ \
@@ -82,10 +81,55 @@
         name##WriteEnhanced = [this, id](int idx, type value, int delay, bool overwrite){ \
             writeRegister(id+idx, value, delay, overwrite); \
         }; \
-    } \
-    private: \
+    };
+
+#define OPortArrayOperation(name, type) \
     std::function<void(int, type)> name##Write; \
     std::function<void(int, type, int, bool)> name##WriteEnhanced;
+
+#define IPort(name, type) \
+    public: \
+        IPortConnect(name, type) \
+    private: \
+        IPortOperation(name, type)
+
+#define IPortArray(name, type, arraySize) \
+    public: \
+        IPortArrayConnect(name, type, arraySize)\
+    private: \
+        IPortArrayOperation(name, type)
+
+#define  OPort(name, type) \
+    public: \
+        OPortConnect(name, type)\
+    private: \
+        OPortOperation(name, type)
+
+#define OPortArray(name, type, arraySize) \
+    public: \
+        OPortArrayConnect(name, type, arraySize)\
+    private: \
+        OPortArrayOperation(name, type)
+
+#define FromChildPort(name, type) \
+    private: \
+        IPortConnect(name, type)\
+        IPortOperation(name, type)
+
+#define FromChildPortArray(name, type, arraySize) \
+    private: \
+        IPortArrayConnect(name, type, arraySize)\
+        IPortArrayOperation(name, type)
+
+#define  ToChildPort(name, type) \
+    private: \
+        OPortConnect(name, type)\
+        OPortOperation(name, type)
+
+#define ToChildPortArray(name, type, arraySize) \
+    private: \
+        OPortArrayConnect(name, type, arraySize)\
+        OPortArrayOperation(name, type)
 
 namespace wolf_sim {
 
@@ -109,7 +153,7 @@ namespace wolf_sim {
         virtual void fire(){};
 
         template<typename AlwaysBlockDerivedType>
-        std::shared_ptr<AlwaysBlockDerivedType> createAlwaysBlock(std::string name = ""){
+        std::shared_ptr<AlwaysBlockDerivedType> createChildBlock(std::string name = ""){
             static_assert(std::is_base_of<AlwaysBlock, AlwaysBlockDerivedType>::value, "internal block must be derived from AlwaysBlock class");
             if(name == ""){
                 name = std::string("anonymous_block_") + std::to_string(internalAlwaysBlockMap.size());
@@ -119,7 +163,6 @@ namespace wolf_sim {
             }
             auto p = std::make_shared<AlwaysBlockDerivedType>();
             internalAlwaysBlockMap[name] = p;
-            std::cout << "createAlwaysBlock: " << name << std::endl;
             p -> construct();
             p -> setNameAndParent(name, shared_from_this());
             return p;
