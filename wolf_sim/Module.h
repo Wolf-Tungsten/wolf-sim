@@ -15,142 +15,88 @@
 #include <functional>
 #include "wolf_sim.h"
 
-#define IPortConnect(name, type) \
-    void name##Connect(std::shared_ptr<wolf_sim::Register> reg){ \
-        int id = inputRegisterMap.size(); \
-        inputRegisterMap[id] = reg; \
-        reg -> connectAsInput(shared_from_this()); \
-        name##HasValue = [this, id](){ \
-            return inputRegPayload.contains(id); \
-        }; \
-        name##Read = [this, id](){ \
-            return std::any_cast<type>(inputRegPayload[id]); \
-        }; \
-    }; 
+#define IPort(portName, type) \
+    wolf_sim::RegReadRef<type> portName = wolf_sim::RegReadRef<type>(this);
 
-#define IPortOperation(name, type) \
-    std::function<bool()> name##HasValue; \
-    std::function<type()> name##Read; 
+#define IPortArray(portName, type, arraySize) \
+    std::vector<wolf_sim::RegReadRef<type>> portName = std::vector<wolf_sim::RegReadRef<type>>(arraySize, wolf_sim::RegReadRef<type>(this));
+        
+#define OPort(portName, type) \
+    wolf_sim::RegWriteRef<type> portName = wolf_sim::RegWriteRef<type>(this);
 
-#define IPortArrayConnect(name, type, arraySize) \
-    void name##Connect(std::vector<std::shared_ptr<wolf_sim::Register>> regVec){ \
-        int id = inputRegisterMap.size(); \
-        for(int i=0; i<arraySize; i++){ \
-            inputRegisterMap[id+i] = regVec[i]; \
-            regVec[i] -> connectAsInput(shared_from_this()); \
-        } \
-        name##HasValue = [this, id](int idx){ \
-            return inputRegPayload.contains(id+idx); \
-        }; \
-        name##Read = [this, id](int idx){ \
-            return std::any_cast<type>(inputRegPayload[id+idx]); \
-        }; \
-    };
+#define OPortArray(portName, type, arraySize) \
+    std::vector<wolf_sim::RegWriteRef<type>> portName = std::vector<wolf_sim::RegWriteRef<type>>(arraySize, wolf_sim::RegWriteRef<type>(this));
 
-#define IPortArrayOperation(name, type, arraySize) \
-    int name##Size = arraySize; \
-    std::function<bool(int)> name##HasValue; \
-    std::function<type(int)> name##Read;
+#define FromChildPort(portName, type) \
+    IPort(portName, type)
 
-#define OPortConnect(name, type) \
-    void name##Connect(std::shared_ptr<wolf_sim::Register> reg){ \
-        int id = outputRegisterMap.size(); \
-        outputRegisterMap[id] = reg; \
-        reg -> connectAsOutput(shared_from_this()); \
-        name##Write = [this, id](type value){ \
-            writeRegister(id, value); \
-        }; \
-        name##WriteDelay = [this, id](type value, wolf_sim::Time_t delay){ \
-            writeRegister(id, value, delay); \
-        }; \
-        name##Terminate = [this, id](wolf_sim::Time_t delay){ \
-            writeRegister(id, std::any(), delay, true); \
-        }; \
-    };
+#define FromChildPortArray(portName, type, arraySize) \
+    IPortArray(portName, type, arraySize)
 
-#define OPortOperation(name, type) \
-    std::function<void(type)> name##Write; \
-    std::function<void(type, wolf_sim::Time_t)> name##WriteDelay; \
-    std::function<void(wolf_sim::Time_t)> name##Terminate;
+#define ToChildPort(portName, type) \
+    OPort(portName, type)
 
-#define OPortArrayConnect(name, type, arraySize) \
-    void name##Connect(std::vector<std::shared_ptr<wolf_sim::Register>> regVec){ \
-        int id = outputRegisterMap.size(); \
-        for(int i=0; i<arraySize; i++){ \
-            outputRegisterMap[id+i] = regVec[i]; \
-            regVec[i] -> connectAsOutput(shared_from_this()); \
-        } \
-        name##Write = [this, id](int idx, type value){ \
-            writeRegister(id+idx, value); \
-        }; \
-        name##WriteDelay = [this, id](int idx, type value, int delay){ \
-            writeRegister(id+idx, value, delay); \
-        }; \
-        name##Terminate = [this, id](int idx, wolf_sim::Time_t delay){ \
-            writeRegister(id+idx, std::any(), delay, true); \
-        }; \
-    };
-
-#define OPortArrayOperation(name, type, arraySize) \
-    int name##Size = arraySize; \
-    std::function<void(int, type)> name##Write; \
-    std::function<void(int, type, wolf_sim::Time_t)> name##WriteDelay; \
-    std::function<void(int, wolf_sim::Time_t)> name##Terminate;
-
-#define IPort(name, type) \
-    public: \
-        IPortConnect(name, type) \
-    private: \
-        IPortOperation(name, type)
-
-#define IPortArray(name, type, arraySize) \
-    public: \
-        IPortArrayConnect(name, type, arraySize)\
-    private: \
-        IPortArrayOperation(name, type, arraySize)
-
-#define  OPort(name, type) \
-    public: \
-        OPortConnect(name, type)\
-    private: \
-        OPortOperation(name, type)
-
-#define OPortArray(name, type, arraySize) \
-    public: \
-        OPortArrayConnect(name, type, arraySize)\
-    private: \
-        OPortArrayOperation(name, type, arraySize)
-
-#define FromChildPort(name, type) \
-    private: \
-        IPortConnect(name, type)\
-        IPortOperation(name, type)
-
-#define FromChildPortArray(name, type, arraySize) \
-    private: \
-        IPortArrayConnect(name, type, arraySize)\
-        IPortArrayOperation(name, type, arraySize)
-
-#define  ToChildPort(name, type) \
-    private: \
-        OPortConnect(name, type)\
-        OPortOperation(name, type)
-
-#define ToChildPortArray(name, type, arraySize) \
-    private: \
-        OPortArrayConnect(name, type, arraySize)\
-        OPortArrayOperation(name, type, arraySize)
+#define ToChildPortArray(portName, type, arraySize) \
+    OPortArray(portName, type, arraySize)
 
 namespace wolf_sim {
 
+    template <typename T>
+    class RegReadRef {
+        public:
+        RegReadRef(Module* _mPtr): mPtr(_mPtr), id(-1){};
+        void connect(std::shared_ptr<Register> regPtr){
+            id = mPtr -> assignInput(regPtr);
+        }
+        bool valid() {
+            if(id == -1){
+                throw std::runtime_error("port not connected");
+            }
+            return mPtr -> inputRegPayload.contains(id);
+        }
+        T read() {
+            if(id == -1){
+                throw std::runtime_error("port not connected");
+            }
+            return std::any_cast<T>(mPtr -> inputRegPayload[id]);
+        }
+        private:
+        Module* mPtr;
+        int id;
+    };
+
+    template <typename T>
+    class RegWriteRef {
+        public:
+        RegWriteRef(Module* _mPtr): mPtr(_mPtr), id(-1){};
+        void connect(std::shared_ptr<Register> regPtr){
+            id = mPtr -> assignOutput(regPtr);
+        }
+        void write(T writePayload, Time_t delay=1){
+            if(id == -1){
+                throw std::runtime_error("port not connected");
+            }
+            mPtr -> writeRegister(id, writePayload, delay, false);
+        }
+        void terminate(Time_t delay=0){
+            if(id == -1){
+                throw std::runtime_error("port not connected");
+            }
+            mPtr -> writeRegister(id, std::any(), delay, true);
+        }
+        private:
+        Module* mPtr;
+        int id;
+    };
+
     class Module : public std::enable_shared_from_this<Module> {
     public:
-        void assignInput(int id, std::shared_ptr<Register> regPtr);
-        void assignOutput(int id, std::shared_ptr<Register> regPtr);
         virtual void construct(){};
-        friend class Environment;
         void setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr);
-    
+        friend class Environment;
+        template <typename T> friend class RegReadRef;
+        template <typename T> friend class RegWriteRef;
+
     protected:
         std::string name;
         std::weak_ptr<Module> parentPtr;
@@ -183,7 +129,6 @@ namespace wolf_sim {
     
     private:
         Time_t internalFireTime = 0;
-        ReturnNothing simulationLoop();
         #if OPT_OPTIMISTIC_READ
         std::map<int, Time_t> inputRegActiveTimeOptimistic;
         std::map<int, bool> inputRegLockedOptimistic;
@@ -205,6 +150,9 @@ namespace wolf_sim {
         };
         std::priority_queue<std::tuple<Time_t, int, std::any, bool>, std::vector<std::tuple<Time_t, int, std::any, bool>>, EarliestRegisterWriteComparator> registerWriteSchedule;
         std::map<int, Time_t> pendingRegisterTerminate;
+        int assignInput(std::shared_ptr<Register> regPtr);
+        int assignOutput(std::shared_ptr<Register> regPtr);
+        ReturnNothing simulationLoop();
     };
     
 }

@@ -32,18 +32,17 @@ namespace wolf_sim
     }
 
     Time_t Register::getActiveTime() {
-        /** 受到 acquireRead 保护，一定不会为空 */
+        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
         return payloadQueue.front().first;
     }
 
     std::any Register::read() {
-        /** 受到 acquireRead 保护，一定不会为空 */
-        std::cout << "寄存器读 " << payloadQueue.front().second.has_value() << std::endl;
+        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
         return payloadQueue.front().second;
     }
 
     void Register::pop() {
-        /** 受到 acquireRead 保护，一定不会为空 */
+        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
         payloadQueue.pop_front();
     }
 
@@ -71,14 +70,12 @@ namespace wolf_sim
 
         lastWriteTime = _writeTime;
         // 尝试与队尾的 packet 合并
-        std::cout << "寄存器写前size " << payloadQueue.size() << " value=" << _payload.has_value() << std::endl;
         if(!payloadQueue.empty() && !payloadQueue.back().second.has_value()){
             payloadQueue.back().first = _writeTime;
             payloadQueue.back().second = _payload;
         } else {
             payloadQueue.push_back({_writeTime, _payload});
         }
-        std::cout << "寄存器写后size " << payloadQueue.size() << std::endl;
 
         condWaitActive.notifyAll();
         mutex.unlock();

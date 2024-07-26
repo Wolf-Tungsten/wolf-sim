@@ -7,14 +7,18 @@ namespace wolf_sim {
         parentPtr = _parentPtr;
     }
     
-    void Module::assignInput(int id, std::shared_ptr<Register> reg) {
+    int Module::assignInput(std::shared_ptr<Register> reg) {
+        int id = inputRegisterMap.size();
         inputRegisterMap[id] = reg;
         reg -> connectAsInput(shared_from_this());
+        return id;
     }
 
-    void Module::assignOutput(int id, std::shared_ptr<Register> reg){
+    int Module::assignOutput(std::shared_ptr<Register> reg){
+        int id = outputRegisterMap.size();
         outputRegisterMap[id] = reg;
         reg -> connectAsOutput(shared_from_this());
+        return id;
     }
  
     std::shared_ptr<Register> Module::createRegister(std::string name){
@@ -67,16 +71,13 @@ namespace wolf_sim {
                     continue;
                 }
                 #endif
-                std::cout << "获取读锁" << std::endl;
                 co_await regPtr->acquireRead();
-                std::cout << "读锁获取成功" << std::endl;
                 if(regPtr->hasTerminated()){
                     terminatedInputRegNote.push_back(regId); // 标记删除
                     regPtr -> releaseRead();
                     continue;
                 }
                 Time_t regActiveTime = regPtr -> getActiveTime();
-                std::cout << "激活时间" << regActiveTime << std::endl;
                 #if OPT_OPTIMISTIC_READ
                 inputRegLockedOptimistic[regId] = true;
                 inputRegActiveTimeOptimistic[regId] = regActiveTime;
@@ -168,6 +169,5 @@ namespace wolf_sim {
                 }
             }
         }
-        std::cout << "SimulatioLoopEnd" << std::endl;
     }
 }

@@ -46,5 +46,6 @@ namespace wolf_sim
         async_simple::coro::Mutex mutex;
         async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condWaitActive;
     };
+
 }
 #endif // WOLF_SIM_REGISTER_H
