@@ -10,6 +10,7 @@
 #include <utility>
 #include <iostream>
 #include <any>
+#include <memory>
 
 #include "wolf_sim.h"
 
@@ -22,8 +23,8 @@ namespace wolf_sim
         // 禁止拷贝
         Register(const Register &r) = delete;
         Register &operator=(const Register &r) = delete;
-        void connectAsInput(AlwaysBlock* blockPtr);
-        void connectAsOutput(AlwaysBlock* blockPtr);
+        void connectAsInput(std::weak_ptr<AlwaysBlock> blockPtr);
+        void connectAsOutput(std::weak_ptr<AlwaysBlock> blockPtr);
         // 寄存器支持的操作
         ReturnNothing acquireRead();
         void releaseRead();
@@ -34,8 +35,8 @@ namespace wolf_sim
     private:
         bool asInputConnected;
         bool asOutputConnected;
-        AlwaysBlock* outputToPtr;
-        AlwaysBlock* inputFromPtr;
+        std::weak_ptr<AlwaysBlock> outputToPtr;
+        std::weak_ptr<AlwaysBlock> inputFromPtr;
         bool active;
         std::atomic<Time_t> activeTime;
         std::any payload;

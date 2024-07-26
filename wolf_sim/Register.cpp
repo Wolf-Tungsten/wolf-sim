@@ -10,7 +10,7 @@ namespace wolf_sim
         asOutputConnected = false;
     }
 
-    void Register::connectAsInput(AlwaysBlock* blockPtr) {
+    void Register::connectAsInput(std::weak_ptr<AlwaysBlock> blockPtr) {
         if(asInputConnected){
             throw std::runtime_error("This register is already used as an input for another block.");
         }
@@ -18,7 +18,7 @@ namespace wolf_sim
         asInputConnected = true;
     }
 
-    void Register::connectAsOutput(AlwaysBlock* blockPtr) {
+    void Register::connectAsOutput(std::weak_ptr<AlwaysBlock> blockPtr) {
         if(asOutputConnected){
             throw std::runtime_error("This register is already used as an output for another block.");
         }

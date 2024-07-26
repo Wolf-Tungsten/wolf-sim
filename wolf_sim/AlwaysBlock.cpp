@@ -9,12 +9,12 @@ namespace wolf_sim {
     
     void AlwaysBlock::assignInput(int id, std::shared_ptr<Register> reg) {
         inputRegisterMap[id] = reg;
-        reg -> connectAsInput(this);
+        reg -> connectAsInput(shared_from_this());
     }
 
     void AlwaysBlock::assignOutput(int id, std::shared_ptr<Register> reg){
         outputRegisterMap[id] = reg;
-        reg -> connectAsOutput(this);
+        reg -> connectAsOutput(shared_from_this());
     }
  
     std::shared_ptr<Register> AlwaysBlock::createRegister(std::string name){
