@@ -11,6 +11,8 @@
 #include <iostream>
 #include <any>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 
 #include "wolf_sim.h"
 
@@ -29,15 +31,15 @@ namespace wolf_sim
         void connectAsInput(std::weak_ptr<Module> modulePtr);
         void connectAsOutput(std::weak_ptr<Module> modulePtr);
         // 寄存器读操作
-        ReturnNothing acquireRead();
+        void acquireRead();
         Time_t getActiveTime();
         bool hasTerminated();
         std::any read();
         void pop();
         void releaseRead();
         // 寄存器写操作
-        ReturnNothing write(Time_t _writeTime, std::any _payload=std::any());
-        ReturnNothing terminate(Time_t _writeTime);
+        void write(Time_t _writeTime, std::any _payload=std::any());
+        void terminate(Time_t _writeTime);
     private:
         std::string name;
         bool asInputConnected;
@@ -47,8 +49,8 @@ namespace wolf_sim
         std::deque<std::pair<Time_t, std::any>> payloadQueue;
         Time_t lastWriteTime;
         bool terminated;
-        async_simple::coro::Mutex mutex;
-        async_simple::coro::ConditionVariable<async_simple::coro::Mutex> condWaitActive;
+        std::mutex mutex;
+        std::condition_variable condWaitActive;
     };
 
 }

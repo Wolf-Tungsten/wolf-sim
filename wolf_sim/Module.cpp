@@ -51,7 +51,7 @@ namespace wolf_sim {
         }
     }
 
-    ReturnNothing Module::simulationLoop(){
+    void Module::simulationLoop(){
         try {
             wakeUpSchedule.push(std::make_pair(0, std::any()));
             bool coldStartUp = true;
@@ -84,7 +84,7 @@ namespace wolf_sim {
                     }
                     #endif
                     std::cout << name << " loop " << loopCount << " 申请寄存器锁：" << regPtr -> getName() << std::endl;
-                    co_await regPtr->acquireRead();
+                    regPtr->acquireRead();
                     if(regPtr->hasTerminated()){
                         terminatedInputRegNote.push_back(regId); // 标记删除
                         regPtr -> releaseRead();
@@ -176,15 +176,15 @@ namespace wolf_sim {
                         bool terminate = writePair.second;
                         if(!terminate){
                             std::cout << name << " loop " << loopCount << " 写寄存器 " << outputRegPair.second -> getName() << " at " << internalFireTime << std::endl;
-                            co_await outputRegPair.second -> write(internalFireTime+1, payload);
+                            outputRegPair.second -> write(internalFireTime+1, payload);
                         } else {
-                            co_await outputRegPair.second -> terminate(internalFireTime+1);
+                            outputRegPair.second -> terminate(internalFireTime+1);
                         }
                     } else {
                         /* 向所有没有写入的寄存器打入一个空的 time packet，
                         这里并不检查这些寄存器的 activeTime，交给 register 中的逻辑自动丢弃较小的 time packet */
                         std::cout << name << " loop " << loopCount << " 写寄存器 timepacket " << outputRegPair.second -> getName() << " at " << internalFireTime << std::endl;
-                        co_await outputRegPair.second -> write(internalFireTime+1, std::any());
+                        outputRegPair.second -> write(internalFireTime+1, std::any());
                     }
                 }
                 coldStartUp = false;

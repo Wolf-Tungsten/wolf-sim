@@ -3,39 +3,39 @@
 //
 
 #include "Environment.h"
-#include "async_simple/executors/SimpleExecutor.h"
-#include "async_simple/coro/SyncAwait.h"
-#include "async_simple/coro/Collect.h"
 
 namespace wolf_sim
 {
     Environment::Environment(int _threadNum) : threadNum(_threadNum) {};
    
+    void Environment::addTopModule(std::shared_ptr<Module> topModulePtr) {
+        topModulePtr -> construct(); /*从这里开始递归构造整个模块树*/
+        addModule(topModulePtr);
+    };
 
-    void Environment::addBlock(std::shared_ptr<Module> blockPtr)
+    void Environment::addModule(std::shared_ptr<Module> modulePtr)
     {
-        modulePtrVec.push_back(blockPtr);
-        for (const auto &internalBlockPair : blockPtr->childModuleMap)
+        modulePtrVec.push_back(modulePtr);
+        for (const auto &internalModulePair : modulePtr->childModuleMap)
         {
-            addBlock(internalBlockPair.second);
+            addModule(internalModulePair.second);
         }
-    }
-
-    async_simple::coro::Lazy<void> Environment::coroStart()
-    {
-        std::vector<async_simple::coro::Lazy<void>> alwaysCoroVec;
-        for (auto modulePtr : modulePtrVec)
-        {
-            alwaysCoroVec.push_back(modulePtr->simulationLoop());
-        }
-        co_await async_simple::coro::collectAllPara(std::move(alwaysCoroVec));
-        co_return;
     }
 
     void wolf_sim::Environment::run()
     {
-        async_simple::executors::SimpleExecutor executor(threadNum);
-        syncAwait(coroStart().via(&executor));
+        // 启动所有 Module 的 simulationLoop，为每个 Module 分配一个线程
+        std::vector<std::thread> threads;
+        for (const auto& modulePtr : modulePtrVec) {
+            threads.emplace_back([&modulePtr]() {
+                modulePtr->simulationLoop();
+            });
+        }
+
+        for (auto& thread : threads) {
+            thread.join();
+        }
+
     }
 };
 

@@ -15,15 +15,10 @@ namespace wolf_sim {
         int threadNum;
         std::vector<std::shared_ptr<Module>> modulePtrVec;
         bool running;
-        async_simple::coro::Lazy<void> coroStart();
-        void addBlock(std::shared_ptr<Module> blockPtr);
+        void addModule(std::shared_ptr<Module> modulePtr);
     public:
         Environment(int _threadNum);
-        template<typename TopBlockType> void createTopBlock(){   
-            auto topBlockPtr = std::make_shared<TopBlockType>();
-            topBlockPtr -> construct(); /*从这里开始递归构造整个模块树*/
-            addBlock(topBlockPtr);
-        };
+        void addTopModule (std::shared_ptr<Module> topModulePtr);
         void run();
     };
 }

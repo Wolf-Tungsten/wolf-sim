@@ -152,7 +152,7 @@ namespace wolf_sim {
         std::map<int, Time_t> pendingRegisterTerminate;
         int assignInput(std::shared_ptr<Register> regPtr);
         int assignOutput(std::shared_ptr<Register> regPtr);
-        ReturnNothing simulationLoop();
+        void simulationLoop();
     };
     
 }

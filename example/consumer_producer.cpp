@@ -66,6 +66,7 @@ class Top : public wolf_sim::Module {
 
 int main() {
     wolf_sim::Environment env(2);
-    env.createTopBlock<Top>();
+    auto top = std::make_shared<Top>();
+    env.addTopModule(top);
     env.run();
 }

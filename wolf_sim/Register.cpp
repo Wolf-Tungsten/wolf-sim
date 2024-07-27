@@ -33,10 +33,11 @@ namespace wolf_sim
         asOutputConnected = true;
     }
 
-    ReturnNothing Register::acquireRead() {
-        co_await mutex.coLock();
-        co_await condWaitActive.wait(mutex, [&]{ return (!payloadQueue.empty()) || terminated; });
-        co_return;
+    void Register::acquireRead() {
+        std::unique_lock<std::mutex> lock(mutex);
+        while(payloadQueue.empty() && !terminated){
+            condWaitActive.wait(lock);
+        }
     }
 
     Time_t Register::getActiveTime() {
@@ -62,8 +63,8 @@ namespace wolf_sim
         mutex.unlock();
     }
 
-    ReturnNothing Register::write(Time_t _writeTime, std::any _payload) {
-        co_await mutex.coLock();
+    void Register::write(Time_t _writeTime, std::any _payload) {
+        std::unique_lock<std::mutex> lock(mutex);
 
         if(_writeTime <= lastWriteTime) {
             if(_payload.has_value()){
@@ -71,8 +72,7 @@ namespace wolf_sim
                 throw std::runtime_error("write time is early than last active");
             } else {
                 // 输入的是一个空的 time packet，减少 always block 的判断
-                mutex.unlock();
-                co_return;
+                return;
             }
         }
 
@@ -85,20 +85,16 @@ namespace wolf_sim
             payloadQueue.push_back({_writeTime, _payload});
         }
 
-        condWaitActive.notify();
-        mutex.unlock();
-        co_return;
+        condWaitActive.notify_all();
     }
 
-    ReturnNothing Register::terminate(Time_t _writeTime) {
-        co_await mutex.coLock();
+    void Register::terminate(Time_t _writeTime) {
+        std::unique_lock<std::mutex> lock(mutex);
         if(_writeTime <= lastWriteTime){
             throw std::runtime_error("terminate time is early than last active");
         }
         lastWriteTime = _writeTime;
         terminated = true;
-        condWaitActive.notifyAll();
-        mutex.unlock();
-        co_return;
+        condWaitActive.notify_all();
     }
 } 
