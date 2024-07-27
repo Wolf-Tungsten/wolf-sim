@@ -7,7 +7,7 @@
 Wolf-Sim 构造的仿真系统是由多个 Module 子类的实例组成的：
 
 1. Module 描述自己的行为
-2. Module 可递归地包含**子 module**，并描述**子 module**之间的连接关系
+2. Module 可递归地包含 **子 Module** ，并描述 **子 Module**之间的连接关系
 3. 一个仿真系统中的 Module 呈现层次树状结构，根节点称为 **顶层 Module**。
 
 Wolf-Sim 中的 Module 可类比于 Verilog 中的模块，或 SystemC 中的模块。
@@ -16,23 +16,23 @@ Wolf-Sim 中的 Module 可类比于 Verilog 中的模块，或 SystemC 中的模
 
 Register 建立 Module 之间的连接，完成数据交换、时间同步。
 
-如果一个 Register R 连接了 Module A 的输出和 Module B 的输入，那么，Module A 写入到 R 的数据一定会被 Module B 读取到。
+如果一个 Register R 连接了 Module A 的输出和 Module B 的输入，那么，Module A 写入到 R 的数据一定会被 Module B 读取到，但从仿真行为的角度看，可以选择忽略。
 
 ### Environment
 
-包装了线程池、仿真系统确立等功能细节，使得用户可以专注于模型的构建。
+包装了仿真系统确立、仿真线程启动等功能细节，使得用户可以专注于模型的构建。
 
-将顶层 Module 交给 Enivronment，然后调用 run() 即可开始仿真。
+将 **顶层Module** 添加到 Enivronment，然后调用 run() 即可开始仿真。
 
 ## 一个手把手教程
 
-我们将尝试用 Wolf-Sim 构造一个生产者消费者模型。
+我们将尝试用 Wolf-Sim 构造一个支持反压的生产者消费者模型。
 
 该模型包含三个模块：Producer，Consumer 和 Top。
 
-Producer 以随机间隔（1-10个单位时间）向 Consumer 发送一个随机浮点数，一共发送 100 个。
+Consumer 每接收一个数字就要花 10 个单位时间进行处理（打印到控制台），处理期间 Consumer 不能接受输入，当 Consumer 可以接受输入时，会向 Producer 发送 ready 信号。
 
-Consumer 每接收一个数字就要花 5 个单位时间进行处理（打印到控制台），如果 Consumer 处理速度跟不上 Producer 输出的速度，Producer 将被阻塞。
+Producer 在收到 Consumer 的 ready 信号后，会向 Consumer 发送一个数字作为 payload，一共发送 10 个 payload 后仿真终止。
 
 Top 是顶层模块，描述了 Producer 和 Consumer 之间的连接关系。
 
