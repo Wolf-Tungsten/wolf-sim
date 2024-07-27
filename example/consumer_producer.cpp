@@ -17,9 +17,6 @@ class Producer : public wolf_sim::Module {
       std::cout << "Producer got ready signal at " << whatTime()
                 << " and sent payload " << payload << std::endl;
       payloadOPort << payload;
-      if (payload >= 10) {
-        payloadOPort.terminate(1);
-      }
       payload++;
     }
   };
@@ -41,8 +38,8 @@ class Consumer : public wolf_sim::Module {
                   << " processing at " << whatTime() << std::endl;
         pending = false;
         if (pendingPayload == 10) {
-          readyOPort.terminate(1);
           std::cout << "Consumer terminated at " << whatTime() << std::endl;
+          terminate();
         } else {
           readyOPort << true;
           std::cout << "Consumer sent ready signal at " << whatTime()

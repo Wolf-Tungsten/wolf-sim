@@ -43,15 +43,41 @@ void Module::planWakeUp(Time_t delay, std::any wakeUpPayload) {
   wakeUpSchedule.push(std::make_pair(internalFireTime + delay, wakeUpPayload));
 }
 
-void Module::writeRegister(int id, std::any writePayload, Time_t delay,
-                           bool terminate) {
+void Module::writeRegister(int id, std::any writePayload, Time_t delay) {
   if (delay < 0) {
     throw std::runtime_error("delay should not be negetive");
   } else if (delay == 0) {
-    pendingRegisterWrite[id] = std::make_pair(writePayload, terminate);
+    pendingRegisterWrite[id] = writePayload;
   } else {
     registerWriteSchedule.push(
-        std::make_tuple(internalFireTime + delay, id, writePayload, terminate));
+        std::make_tuple(internalFireTime + delay, id, writePayload));
+  }
+}
+
+void Module::terminate() {
+  terminationNotify();
+  // 额外抛出异常
+  throw SimulationTerminateException();
+}
+
+void Module::terminationNotify() {
+  // 如果当前模块已终止则忽略
+  if (!hasTerminated) {
+    // 将自己标记为终止
+    hasTerminated = true;
+    // 通知所有输出寄存器终止
+    for (const auto& regPair : outputRegisterMap) {
+      regPair.second->terminationNotify();
+    }
+    // 如果有父 Module，通知父 Module
+    if (!parentPtr.expired()) {
+      auto parent = parentPtr.lock();
+      parent->terminationNotify();
+    }
+    // 如果有子 Module，通知子 Module
+    for (const auto& childPair : childModuleMap) {
+      childPair.second->terminationNotify();
+    }
   }
 }
 
@@ -65,7 +91,7 @@ void Module::simulationLoop() {
     // !inputRegisterMap.empty() ||
     // !wakeUpSchedule.empty() ||
     // !registerWriteSchedule.empty()
-    while (1) {
+    while (!hasTerminated) {
       /* 计算最小唤醒时间 */
       Time_t minTime = MAX_TIME;
 #if OPT_OPTIMISTIC_READ
@@ -98,13 +124,6 @@ void Module::simulationLoop() {
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" +
                    regPtr->getName());
         regPtr->acquireRead();
-        if (regPtr->hasTerminated()) {
-          MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
-                     regPtr->getName() + " 已标记为终止，将移除");
-          terminatedInputRegNote.push_back(regId);  // 标记删除
-          regPtr->releaseRead();
-          continue;
-        }
         Time_t regActiveTime = regPtr->getActiveTime();
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
                    regPtr->getName() + " 锁定成功");
@@ -116,11 +135,6 @@ void Module::simulationLoop() {
           minTime = regActiveTime;
         }
       }
-      // 根据 terminatedInputRegNote 删除已经终止的寄存器
-      for (const auto& id : terminatedInputRegNote) {
-        inputRegisterMap.erase(id);
-      }
-      terminatedInputRegNote.clear();
       MODULE_LOG("loop " + std::to_string(loopCount) +
                  " 2.输入寄存器的 minTime= " +
                  (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
@@ -177,8 +191,7 @@ void Module::simulationLoop() {
         const auto& regWriteTuple = registerWriteSchedule.top();
         int id = std::get<1>(regWriteTuple);
         std::any payload = std::get<2>(regWriteTuple);
-        bool terminate = std::get<3>(regWriteTuple);
-        pendingRegisterWrite[id] = std::make_pair(payload, terminate);
+        pendingRegisterWrite[id] = payload;
         registerWriteSchedule.pop();
         MODULE_LOG("loop " + std::to_string(loopCount) + " 6.1.将写入寄存器 " +
                    outputRegisterMap[id]->getName());
@@ -186,7 +199,7 @@ void Module::simulationLoop() {
       if (minTime == MAX_TIME) {
         MODULE_LOG("loop " + std::to_string(loopCount) +
                    " 7.没有找到有效的 minTime，模块仿真结束");
-        return;
+        throw SimulationTerminateException();
       } else if (internalFireTime > 0 && minTime <= internalFireTime) {
         MODULE_LOG("loop " + std::to_string(loopCount) +
                    " 7.找到有效的 minTime " + std::to_string(minTime) +
@@ -198,37 +211,21 @@ void Module::simulationLoop() {
       internalFireTime = minTime;
       /* 如果有 payload 就 fire */
       if (!inputRegPayload.empty() || !wakeUpPayload.empty()) {
-        try {
-          MODULE_LOG("loop " + std::to_string(loopCount) +
-                     " 7.执行 fire， 本次启动时间 " +
-                     std::to_string(internalFireTime));
-          fire();
-        } catch (const std::exception& e) {
-          std::cerr << "Exception caught in Module fire: " << e.what()
-                    << std::endl;
-          exit(1);
-        }
+        MODULE_LOG("loop " + std::to_string(loopCount) +
+                   " 7.执行 fire， 本次启动时间 " +
+                   std::to_string(internalFireTime));
+        fire();
       }
       /* 将 fire 产生和之前计划的寄存器写动作写出 */
       for (const auto& outputRegPair : outputRegisterMap) {
         int id = outputRegPair.first;
         if (pendingRegisterWrite.contains(id)) {
-          auto& writePair = pendingRegisterWrite[id];
-          std::any payload = writePair.first;
-          bool terminate = writePair.second;
-          if (!terminate) {
-            MODULE_LOG("loop " + std::to_string(loopCount) +
-                       " 8.写输出寄存器 " + outputRegPair.second->getName() +
-                       " 写入时间 " + std::to_string(internalFireTime + 1));
-            outputRegPair.second->write(internalFireTime + 1, payload);
-          } else {
-            MODULE_LOG("loop " + std::to_string(loopCount) +
-                       " 8.终止输出寄存器 " + outputRegPair.second->getName() +
-                       " 写入时间 " + std::to_string(internalFireTime + 1));
-            outputRegPair.second->terminate(internalFireTime + 1);
-            terminatedOutputRegNote[id] = true;
-          }
-        } else if (!terminatedOutputRegNote.contains(id)) {
+          std::any payload = pendingRegisterWrite[id];
+          MODULE_LOG("loop " + std::to_string(loopCount) + " 8.写输出寄存器 " +
+                     outputRegPair.second->getName() + " 写入时间 " +
+                     std::to_string(internalFireTime + 1));
+          outputRegPair.second->write(internalFireTime + 1, payload);
+        } else {
           /* 向所有没有写入的寄存器打入一个空的 time packet，
           这里并不检查这些寄存器的 activeTime，交给 register
           中的逻辑自动丢弃较小的 time packet */
@@ -241,7 +238,8 @@ void Module::simulationLoop() {
       }
       loopCount++;
     }
-
+  } catch (const SimulationTerminateException& e) {
+    MODULE_LOG("SimulationLoop terminated");
   } catch (const std::exception& e) {
     std::cerr << "Exception caught in Simulation: " << e.what() << std::endl;
     exit(1);

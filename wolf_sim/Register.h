@@ -33,13 +33,12 @@ namespace wolf_sim
         // 寄存器读操作
         void acquireRead();
         Time_t getActiveTime();
-        bool hasTerminated();
         std::any read();
         void pop();
         void releaseRead();
         // 寄存器写操作
         void write(Time_t _writeTime, std::any _payload=std::any());
-        void terminate(Time_t _writeTime);
+        void terminationNotify();
     private:
         std::string name;
         bool asInputConnected;

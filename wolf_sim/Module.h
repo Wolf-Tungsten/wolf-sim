@@ -104,14 +104,7 @@ class RegWriteRef {
     if (id == -1) {
       throw std::runtime_error("port not connected");
     }
-    mPtr->writeRegister(id, writePayload, delay, false);
-  }
-
-  void terminate(Time_t delay = 0) {
-    if (id == -1) {
-      throw std::runtime_error("port not connected");
-    }
-    mPtr->writeRegister(id, std::any(), delay, true);
+    mPtr->writeRegister(id, writePayload, delay);
   }
 
   void operator<<(const T& value) { write(value); }
@@ -130,6 +123,9 @@ class Module : public std::enable_shared_from_this<Module> {
   friend class RegReadRef;
   template <typename T>
   friend class RegWriteRef;
+  class SimulationTerminateException : public std::exception {};
+  void terminationNotify();
+
 
  protected:
   std::string name;
@@ -161,23 +157,22 @@ class Module : public std::enable_shared_from_this<Module> {
   };
   std::shared_ptr<Register> createRegister(std::string name = "");
   void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
-  void writeRegister(int id, std::any writePayload, Time_t delay = 1,
-                     bool terminate = false);
+  void writeRegister(int id, std::any writePayload, Time_t delay = 1);
+  void terminate();
 
  private:
   void moduleLog(std::string msg) {
     std::cout << "[" << name << "] " << msg << std::endl;
   }
   Time_t internalFireTime = 0;
+  std::atomic<bool> hasTerminated = false;
 #if OPT_OPTIMISTIC_READ
   std::map<int, Time_t> inputRegActiveTimeOptimistic;
   std::map<int, bool> inputRegLockedOptimistic;
 #endif
-  std::vector<int> terminatedInputRegNote;
-  std::map<int, bool> terminatedOutputRegNote;
   std::map<std::string, std::shared_ptr<Register>> childRegisterMap;
   std::map<std::string, std::shared_ptr<Module>> childModuleMap;
-  std::map<int, std::pair<std::any, bool>> pendingRegisterWrite;
+  std::map<int, std::any> pendingRegisterWrite;
   struct EarliestWakeUpComparator {
     bool operator()(const std::pair<Time_t, std::any>& p1,
                     const std::pair<Time_t, std::any>& p2) {
@@ -189,16 +184,15 @@ class Module : public std::enable_shared_from_this<Module> {
                       EarliestWakeUpComparator>
       wakeUpSchedule;
   struct EarliestRegisterWriteComparator {
-    bool operator()(const std::tuple<Time_t, int, std::any, bool>& p1,
-                    const std::tuple<Time_t, int, std::any, bool>& p2) {
+    bool operator()(const std::tuple<Time_t, int, std::any>& p1,
+                    const std::tuple<Time_t, int, std::any>& p2) {
       return std::get<0>(p1) > std::get<0>(p2);
     }
   };
-  std::priority_queue<std::tuple<Time_t, int, std::any, bool>,
-                      std::vector<std::tuple<Time_t, int, std::any, bool>>,
+  std::priority_queue<std::tuple<Time_t, int, std::any>,
+                      std::vector<std::tuple<Time_t, int, std::any>>,
                       EarliestRegisterWriteComparator>
       registerWriteSchedule;
-  std::map<int, Time_t> pendingRegisterTerminate;
   int assignInput(std::shared_ptr<Register> regPtr);
   int assignOutput(std::shared_ptr<Register> regPtr);
   void simulationLoop();

@@ -38,25 +38,24 @@ namespace wolf_sim
         while(payloadQueue.empty() && !terminated){
             condWaitActive.wait(lock);
         }
+        if(terminated){
+            throw Module::SimulationTerminateException();
+        }
     }
 
     Time_t Register::getActiveTime() {
-        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
+        /** 需要 acquireRead 保护，一定不会为空 */
         return payloadQueue.front().first;
     }
 
     std::any Register::read() {
-        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
+        /** 需要 acquireRead 保护，一定不会为空 */
         return payloadQueue.front().second;
     }
 
     void Register::pop() {
-        /** 受到 acquireRead 和 hasTerminated 保护，一定不会为空 */
+        /** 需要 acquireRead 保护，一定不会为空 */
         payloadQueue.pop_front();
-    }
-
-    bool Register::hasTerminated() {
-        return terminated && payloadQueue.empty();
     }
 
     void Register::releaseRead() {
@@ -76,10 +75,6 @@ namespace wolf_sim
             }
         }
 
-        if(terminated){
-            throw std::runtime_error("write to terminated register");
-        }
-
         lastWriteTime = _writeTime;
         // 尝试与队尾的 packet 合并
         if(!payloadQueue.empty() && !payloadQueue.back().second.has_value()){
@@ -92,14 +87,9 @@ namespace wolf_sim
         condWaitActive.notify_all();
     }
 
-    void Register::terminate(Time_t _writeTime) {
+    void Register::terminationNotify() {
         std::unique_lock<std::mutex> lock(mutex);
-        if(_writeTime <= lastWriteTime){
-            throw std::runtime_error("terminate time is early than last active");
-        }
-        lastWriteTime = _writeTime;
         terminated = true;
-        payloadQueue.push_back({_writeTime, std::any()});
         condWaitActive.notify_all();
     }
 } 
