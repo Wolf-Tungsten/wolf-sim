@@ -1,14 +1,40 @@
 # Wolf-Sim：一个C++并行离散事件框架
 
-## 三个组件
+## 三个基础组件
 
 ### Module
 
+Wolf-Sim 构造的仿真系统是由多个 Module 子类的实例组成的：
+
+1. Module 描述自己的行为
+2. Module 可递归地包含**子 module**，并描述**子 module**之间的连接关系
+3. 一个仿真系统中的 Module 呈现层次树状结构，根节点称为 **顶层 Module**。
+
+Wolf-Sim 中的 Module 可类比于 Verilog 中的模块，或 SystemC 中的模块。
+
 ### Register
+
+Register 建立 Module 之间的连接，完成数据交换、时间同步。
+
+如果一个 Register R 连接了 Module A 的输出和 Module B 的输入，那么，Module A 写入到 R 的数据一定会被 Module B 读取到。
 
 ### Environment
 
-## 如何构建一个仿真模型
+包装了线程池、仿真系统确立等功能细节，使得用户可以专注于模型的构建。
+
+将顶层 Module 交给 Enivronment，然后调用 run() 即可开始仿真。
+
+## 一个手把手教程
+
+我们将尝试用 Wolf-Sim 构造一个生产者消费者模型。
+
+该模型包含三个模块：Producer，Consumer 和 Top。
+
+Producer 以随机间隔（1-10个单位时间）向 Consumer 发送一个随机浮点数，一共发送 100 个。
+
+Consumer 每接收一个数字就要花 5 个单位时间进行处理（打印到控制台），如果 Consumer 处理速度跟不上 Producer 输出的速度，Producer 将被阻塞。
+
+Top 是顶层模块，描述了 Producer 和 Consumer 之间的连接关系。
 
 ### 1. 创建自定义的 Module
 

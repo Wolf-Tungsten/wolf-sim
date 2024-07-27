@@ -11,7 +11,7 @@
 #define OPT_OPTIMISTIC_READ 0
 
 namespace wolf_sim {
-    using Time_t = uint64_t;
+    using Time_t = int64_t;
     const Time_t MAX_TIME = std::numeric_limits<Time_t>::max();
     using ReturnNothing = async_simple::coro::Lazy<>;
     class Register;

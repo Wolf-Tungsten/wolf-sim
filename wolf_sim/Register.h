@@ -23,6 +23,9 @@ namespace wolf_sim
         // 禁止拷贝
         Register(const Register &r) = delete;
         Register &operator=(const Register &r) = delete;
+        // 设置和读取名称
+        void setName(std::string _name);
+        std::string getName();
         void connectAsInput(std::weak_ptr<Module> modulePtr);
         void connectAsOutput(std::weak_ptr<Module> modulePtr);
         // 寄存器读操作
@@ -36,6 +39,7 @@ namespace wolf_sim
         ReturnNothing write(Time_t _writeTime, std::any _payload=std::any());
         ReturnNothing terminate(Time_t _writeTime);
     private:
+        std::string name;
         bool asInputConnected;
         bool asOutputConnected;
         std::weak_ptr<Module> outputToPtr;

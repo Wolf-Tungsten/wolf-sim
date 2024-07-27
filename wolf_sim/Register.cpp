@@ -4,10 +4,17 @@
 namespace wolf_sim
 {
     Register::Register() {
-        lastWriteTime = 0;
+        lastWriteTime = -1;
         terminated = false;
         asInputConnected = false;
         asOutputConnected = false;
+    }
+
+    void Register::setName(std::string _name) {
+        name = _name;
+    }
+    std::string Register::getName() {
+        return name;
     }
 
     void Register::connectAsInput(std::weak_ptr<Module> modulePtr) {
@@ -29,6 +36,7 @@ namespace wolf_sim
     ReturnNothing Register::acquireRead() {
         co_await mutex.coLock();
         co_await condWaitActive.wait(mutex, [&]{ return (!payloadQueue.empty()) || terminated; });
+        co_return;
     }
 
     Time_t Register::getActiveTime() {
@@ -77,8 +85,9 @@ namespace wolf_sim
             payloadQueue.push_back({_writeTime, _payload});
         }
 
-        condWaitActive.notifyAll();
+        condWaitActive.notify();
         mutex.unlock();
+        co_return;
     }
 
     ReturnNothing Register::terminate(Time_t _writeTime) {
@@ -90,5 +99,6 @@ namespace wolf_sim
         terminated = true;
         condWaitActive.notifyAll();
         mutex.unlock();
+        co_return;
     }
 } 

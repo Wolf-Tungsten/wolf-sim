@@ -5,48 +5,67 @@
 
 class Producer : public wolf_sim::Module {
     public:
-    OPort(o, int);
+    IPort(consumerReady, bool);
+    OPort(payloadOutput, int);
     private:
+    int payload;
     void fire(){
-        o.write(fireTime);
-        std::cout << "Producer Time= " << fireTime << ", Payload=" << fireTime << std::endl;
-        if(fireTime <= 100){
-            planWakeUp(5);
-        } else {
-            o.terminate(0);
+        std::cout << "Producer fire at " << fireTime << std::endl;
+        if(consumerReady.valid()){
+            std::cout << "Producer get consumer ready signal at " << fireTime << " and send payload " << payload << std::endl;
+            payloadOutput.write(payload++);
         }
     };
 };
 
 class Consumer : public wolf_sim::Module {
     public:
-    IPortArray(i, int, 10);
+    IPort(payloadInput, int);
+    OPort(consumerReady, bool);
     private:
+    bool pending = false;
+    wolf_sim::Time_t doneTime = 0;
+    int pendingPayload;
     void fire(){
-        std::cout << "consumer" << std::endl;
-        if(i[0].valid()){
-            std::cout << "Consumer Time= " << fireTime << ", Payload=" << i[0].read() << std::endl;
-            std::cout << "Consumer 计划在 Time=" << fireTime+2 << "唤醒" << std::endl;
-            planWakeUp(2, (int)fireTime);
-        } else if (wakeUpPayload[0].has_value()){
-            std::cout << "Consumer Time= " << fireTime << ", WakeUpPayload=" << std::any_cast<int>(wakeUpPayload[0]) << std::endl;
+        std::cout << "Consumer fire at " << fireTime << std::endl; 
+        if(pending){
+            if(doneTime == fireTime){
+                std::cout << "Consumer process payload " << pendingPayload << " done at " << fireTime << std::endl;
+                pending = false;
+                consumerReady.write(true);
+            }
+        } else {
+            if(payloadInput.valid()){
+                pending = true;
+                pendingPayload = payloadInput.read();
+                doneTime = fireTime + 10;
+                planWakeUp(10);
+            } else {
+                std::cout << "Consumer get no payload at " << fireTime << std::endl;
+                consumerReady.write(true);
+            }
         }
+        
+
     }
 };
 
-class ProducerConsumerSystem : public wolf_sim::Module {
+class Top : public wolf_sim::Module {
     public:
     void construct(){
-        auto producer = createChildModule<Producer>("producer");
-        auto consumer = createChildModule<Consumer>("consumer");
-        auto reg = createRegister("reg");
-        producer -> o.connect(reg);
-        consumer -> i[0].connect(reg);
+        auto producer = createChildModule<Producer>("Producer");
+        auto consumer = createChildModule<Consumer>("Consumer");
+        auto readyReg = createRegister("readyReg");
+        auto payloadReg = createRegister("payloadReg");
+        producer -> payloadOutput.connect(payloadReg);
+        consumer -> payloadInput.connect(payloadReg);
+        producer -> consumerReady.connect(readyReg);
+        consumer -> consumerReady.connect(readyReg);
     }
 };
 
 int main() {
-    wolf_sim::Environment env(1);
-    env.createTopBlock<ProducerConsumerSystem>();
+    wolf_sim::Environment env(2);
+    env.createTopBlock<Top>();
     env.run();
 }

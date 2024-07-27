@@ -72,7 +72,7 @@ namespace wolf_sim {
         void connect(std::shared_ptr<Register> regPtr){
             id = mPtr -> assignOutput(regPtr);
         }
-        void write(T writePayload, Time_t delay=1){
+        void write(T writePayload, Time_t delay=0){
             if(id == -1){
                 throw std::runtime_error("port not connected");
             }
