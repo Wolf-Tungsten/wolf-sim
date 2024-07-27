@@ -51,29 +51,35 @@ namespace wolf_sim {
         }
     }
 
+    Time_t Module::whatTime(){
+        return internalFireTime;
+    }
+
     void Module::simulationLoop(){
         try {
+            /** 在 wakeUpScheduler 中放一个 0 时刻的启动 */
             wakeUpSchedule.push(std::make_pair(0, std::any()));
-            bool coldStartUp = true;
-            int loopCount = 0;
-            while(!inputRegisterMap.empty() || 
-            !wakeUpSchedule.empty() || 
-            !registerWriteSchedule.empty()){
+            int loopCount = 0; // 调试信息
+            // !inputRegisterMap.empty() || 
+            // !wakeUpSchedule.empty() || 
+            // !registerWriteSchedule.empty()
+            while(1){
                 /* 计算最小唤醒时间 */
                 Time_t minTime = MAX_TIME;
                 #if OPT_OPTIMISTIC_READ
                 inputRegLockedOptimistic.clear();
                 #endif
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 0.开始计算 minTime");
                 if(!wakeUpSchedule.empty()){
                     Time_t wakeUpTime = wakeUpSchedule.top().first;
                     if(wakeUpTime < minTime){
                         minTime = wakeUpTime;
                     }
                 }
-                std::cout << name << " loop " << loopCount << " wakeUp minTime= " << minTime << std::endl;
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 1.计划唤醒的 minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
                 for(const auto& inputRegPair : inputRegisterMap){
-                    if(coldStartUp){
-                        std::cout << name << " loop " << loopCount << " 申请寄存器锁冷启动跳过" << std::endl;
+                    if(minTime == 0){
+                        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请寄存器锁被冷启动跳过");
                         break;
                     }
                     int regId = inputRegPair.first;
@@ -83,15 +89,16 @@ namespace wolf_sim {
                         continue;
                     }
                     #endif
-                    std::cout << name << " loop " << loopCount << " 申请寄存器锁：" << regPtr -> getName() << std::endl;
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" + regPtr -> getName());
                     regPtr->acquireRead();
                     if(regPtr->hasTerminated()){
+                        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " + regPtr -> getName() + " 已标记为终止，将移除");
                         terminatedInputRegNote.push_back(regId); // 标记删除
                         regPtr -> releaseRead();
                         continue;
                     }
                     Time_t regActiveTime = regPtr -> getActiveTime();
-                    std::cout << name << " loop " << loopCount << " 申请寄存器锁成功：" << regPtr -> getName() << std::endl;
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " + regPtr -> getName() + " 锁定成功");
                     #if OPT_OPTIMISTIC_READ
                     inputRegLockedOptimistic[regId] = true;
                     inputRegActiveTimeOptimistic[regId] = regActiveTime;
@@ -105,21 +112,19 @@ namespace wolf_sim {
                     inputRegisterMap.erase(id);
                 }
                 terminatedInputRegNote.clear();
-                std::cout << name << " loop " << loopCount << " 输入寄存器 minTime= " << minTime << std::endl;
-                std::cout << name << " loop " << loopCount << " 读取写时间调度表" << std::endl;
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 2.输入寄存器的 minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
                 if(!registerWriteSchedule.empty()){
                     Time_t writeTime = std::get<0>(registerWriteSchedule.top());
                     if(writeTime < minTime){
                         minTime = writeTime;
                     }
                 }
-                std::cout << name << " loop " << loopCount << " 最终 minTime= " << minTime << std::endl;
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 3.计划写入的（最终） minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 4.读取寄存器");
                 /* 构造传给 fire 的 payload 列表 */
-                std::cout << name << " loop " << loopCount << " 读寄存器" << std::endl;
                 inputRegPayload.clear();
                 for(const auto& inputRegPair: inputRegisterMap){
-                    if(coldStartUp){
-                        std::cout << name << " loop " << loopCount << " 读寄存器冷启动跳过" << std::endl;
+                    if(minTime == 0){
                         break;
                     }
                     #if OPT_OPTIMISTIC_READ
@@ -132,20 +137,24 @@ namespace wolf_sim {
                     Time_t regActiveTime = regPtr -> getActiveTime();
                     std::any payload = regPtr -> read();
                     if(regActiveTime == minTime){
+                        MODULE_LOG("loop " + std::to_string(loopCount) + " 4.1.读取并弹出寄存器 " + regPtr -> getName());
                         if(payload.has_value()){
                             inputRegPayload[inputRegPair.first] = payload;
                         }
                         regPtr -> pop();
-                        std::cout << name << " loop " << loopCount << " pop 寄存器 " << regPtr -> getName() << std::endl;
                     }
                     regPtr -> releaseRead();
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 4.2.释放寄存器 " + regPtr -> getName());
                 }
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 5.查找计划唤醒任务");
                 wakeUpPayload.clear();
                 while(!wakeUpSchedule.empty() && wakeUpSchedule.top().first == minTime){
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 5.1.找到计划唤醒任务");
                     wakeUpPayload.push_back(wakeUpSchedule.top().second);
                     wakeUpSchedule.pop();
                 }
                 /* 将寄存器写请求构造出来 */
+                MODULE_LOG("loop " + std::to_string(loopCount) + " 6.查找寄存器写入任务");
                 pendingRegisterWrite.clear();
                 while(!registerWriteSchedule.empty() && std::get<0>(registerWriteSchedule.top()) == minTime){
                     const auto& regWriteTuple = registerWriteSchedule.top();
@@ -154,20 +163,28 @@ namespace wolf_sim {
                     bool terminate = std::get<3>(regWriteTuple);
                     pendingRegisterWrite[id] = std::make_pair(payload, terminate);
                     registerWriteSchedule.pop();
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 6.1.将写入寄存器 " + outputRegisterMap[id] -> getName());
+                }
+                if(minTime == MAX_TIME){
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 7.没有找到有效的 minTime，模块仿真结束");
+                    return;
+                } else if (internalFireTime > 0 && minTime <= internalFireTime){
+                    MODULE_LOG("loop " + std::to_string(loopCount) + " 7.找到有效的 minTime " + std::to_string(minTime) + " 但是早于上次 fire 时间 " + std::to_string(internalFireTime));
+                    throw std::runtime_error("time sequence error");
                 }
                 /* 记录（可能的）fire 时间 */
                 internalFireTime = minTime;
-                fireTime = minTime;
                 /* 如果有 payload 就 fire */
                 if(!inputRegPayload.empty() || !wakeUpPayload.empty()){
                     try {
+                        MODULE_LOG("loop " + std::to_string(loopCount) + " 7.执行 fire， 本次启动时间 " + std::to_string(internalFireTime));
                         fire();
                     } catch (const std::exception& e){
                         std::cerr << "Exception caught in Module fire: " << e.what() << std::endl;
                         exit(1);
                     }
                 }
-                /* 将 fire 产生的结果写出 */
+                /* 将 fire 产生和之前计划的寄存器写动作写出 */
                 for(const auto& outputRegPair: outputRegisterMap){
                     int id = outputRegPair.first;
                     if(pendingRegisterWrite.contains(id)){
@@ -175,22 +192,23 @@ namespace wolf_sim {
                         std::any payload = writePair.first;
                         bool terminate = writePair.second;
                         if(!terminate){
-                            std::cout << name << " loop " << loopCount << " 写寄存器 " << outputRegPair.second -> getName() << " at " << internalFireTime << std::endl;
+                            MODULE_LOG("loop " + std::to_string(loopCount) + " 8.写输出寄存器 " + outputRegPair.second -> getName() + " 写入时间 " + std::to_string(internalFireTime+1));
                             outputRegPair.second -> write(internalFireTime+1, payload);
                         } else {
+                            MODULE_LOG("loop " + std::to_string(loopCount) + " 8.终止输出寄存器 " + outputRegPair.second -> getName() + " 写入时间 " + std::to_string(internalFireTime+1));
                             outputRegPair.second -> terminate(internalFireTime+1);
+                            terminatedOutputRegNote[id] = true;
                         }
-                    } else {
+                    } else if(!terminatedOutputRegNote.contains(id)){ 
                         /* 向所有没有写入的寄存器打入一个空的 time packet，
                         这里并不检查这些寄存器的 activeTime，交给 register 中的逻辑自动丢弃较小的 time packet */
-                        std::cout << name << " loop " << loopCount << " 写寄存器 timepacket " << outputRegPair.second -> getName() << " at " << internalFireTime << std::endl;
+                        MODULE_LOG("loop " + std::to_string(loopCount) + " 8.写输出寄存器 timepacket " + outputRegPair.second -> getName()+ " 写入时间 " + std::to_string(internalFireTime+1));
                         outputRegPair.second -> write(internalFireTime+1, std::any());
                     }
                 }
-                coldStartUp = false;
                 loopCount++;
             }
-            std::cout << "Simulation Loop End" << std::endl;
+            
         } catch (const std::exception& e){
                         std::cerr << "Exception caught in Simulation: " << e.what() << std::endl;
                         exit(1);

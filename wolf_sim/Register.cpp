@@ -76,6 +76,10 @@ namespace wolf_sim
             }
         }
 
+        if(terminated){
+            throw std::runtime_error("write to terminated register");
+        }
+
         lastWriteTime = _writeTime;
         // 尝试与队尾的 packet 合并
         if(!payloadQueue.empty() && !payloadQueue.back().second.has_value()){
@@ -95,6 +99,7 @@ namespace wolf_sim
         }
         lastWriteTime = _writeTime;
         terminated = true;
+        payloadQueue.push_back({_writeTime, std::any()});
         condWaitActive.notify_all();
     }
 } 
