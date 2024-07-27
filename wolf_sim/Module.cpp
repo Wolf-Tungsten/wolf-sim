@@ -2,216 +2,249 @@
 
 namespace wolf_sim {
 
-    void Module::setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr){
-        name = _name;
-        parentPtr = _parentPtr;
-    }
-    
-    int Module::assignInput(std::shared_ptr<Register> reg) {
-        int id = inputRegisterMap.size();
-        inputRegisterMap[id] = reg;
-        reg -> connectAsInput(shared_from_this());
-        return id;
-    }
-
-    int Module::assignOutput(std::shared_ptr<Register> reg){
-        int id = outputRegisterMap.size();
-        outputRegisterMap[id] = reg;
-        reg -> connectAsOutput(shared_from_this());
-        return id;
-    }
- 
-    std::shared_ptr<Register> Module::createRegister(std::string name){
-        if(name == ""){
-            name = std::string("anonymous_reg_") + std::to_string(childRegisterMap.size());
-        }
-        if(childRegisterMap.contains(name)){
-            throw std::runtime_error("create Register name conflict!");
-        }
-        auto p = std::make_shared<Register>();
-        p -> setName(name);
-        childRegisterMap[name] = p;
-        return p;
-    }
-
-    void Module::planWakeUp(Time_t delay, std::any wakeUpPayload) {
-        if(delay <= 0){
-            throw std::runtime_error("delay should be positive");
-        }
-        wakeUpSchedule.push(std::make_pair(internalFireTime+delay, wakeUpPayload));
-    }
-
-    void Module::writeRegister(int id, std::any writePayload, Time_t delay, bool terminate){
-        if(delay < 0) {
-           throw std::runtime_error("delay should not be negetive"); 
-        } else if (delay == 0){
-           pendingRegisterWrite[id] = std::make_pair(writePayload, terminate);
-        } else {
-           registerWriteSchedule.push(std::make_tuple(internalFireTime+delay, id, writePayload, terminate));
-        }
-    }
-
-    Time_t Module::whatTime(){
-        return internalFireTime;
-    }
-
-    void Module::simulationLoop(){
-        try {
-            /** 在 wakeUpScheduler 中放一个 0 时刻的启动 */
-            wakeUpSchedule.push(std::make_pair(0, std::any()));
-            int loopCount = 0; // 调试信息
-            // !inputRegisterMap.empty() || 
-            // !wakeUpSchedule.empty() || 
-            // !registerWriteSchedule.empty()
-            while(1){
-                /* 计算最小唤醒时间 */
-                Time_t minTime = MAX_TIME;
-                #if OPT_OPTIMISTIC_READ
-                inputRegLockedOptimistic.clear();
-                #endif
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 0.开始计算 minTime");
-                if(!wakeUpSchedule.empty()){
-                    Time_t wakeUpTime = wakeUpSchedule.top().first;
-                    if(wakeUpTime < minTime){
-                        minTime = wakeUpTime;
-                    }
-                }
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 1.计划唤醒的 minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
-                for(const auto& inputRegPair : inputRegisterMap){
-                    if(minTime == 0){
-                        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请寄存器锁被冷启动跳过");
-                        break;
-                    }
-                    int regId = inputRegPair.first;
-                    auto regPtr = inputRegPair.second;
-                    #if OPT_OPTIMISTIC_READ
-                    if(inputRegActiveTimeOptimistic.contains(regId) && inputRegActiveTimeOptimistic[regId] > minTime){
-                        continue;
-                    }
-                    #endif
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" + regPtr -> getName());
-                    regPtr->acquireRead();
-                    if(regPtr->hasTerminated()){
-                        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " + regPtr -> getName() + " 已标记为终止，将移除");
-                        terminatedInputRegNote.push_back(regId); // 标记删除
-                        regPtr -> releaseRead();
-                        continue;
-                    }
-                    Time_t regActiveTime = regPtr -> getActiveTime();
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " + regPtr -> getName() + " 锁定成功");
-                    #if OPT_OPTIMISTIC_READ
-                    inputRegLockedOptimistic[regId] = true;
-                    inputRegActiveTimeOptimistic[regId] = regActiveTime;
-                    #endif
-                    if(regActiveTime < minTime){
-                        minTime = regActiveTime;
-                    }
-                }
-                // 根据 terminatedInputRegNote 删除已经终止的寄存器
-                for(const auto& id: terminatedInputRegNote){
-                    inputRegisterMap.erase(id);
-                }
-                terminatedInputRegNote.clear();
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 2.输入寄存器的 minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
-                if(!registerWriteSchedule.empty()){
-                    Time_t writeTime = std::get<0>(registerWriteSchedule.top());
-                    if(writeTime < minTime){
-                        minTime = writeTime;
-                    }
-                }
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 3.计划写入的（最终） minTime= " + (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 4.读取寄存器");
-                /* 构造传给 fire 的 payload 列表 */
-                inputRegPayload.clear();
-                for(const auto& inputRegPair: inputRegisterMap){
-                    if(minTime == 0){
-                        break;
-                    }
-                    #if OPT_OPTIMISTIC_READ
-                    int regId = inputRegPair.first;
-                    if(!inputRegLockedOptimistic.contains(regId)){
-                        continue;
-                    }
-                    #endif
-                    auto regPtr = inputRegPair.second;
-                    Time_t regActiveTime = regPtr -> getActiveTime();
-                    std::any payload = regPtr -> read();
-                    if(regActiveTime == minTime){
-                        MODULE_LOG("loop " + std::to_string(loopCount) + " 4.1.读取并弹出寄存器 " + regPtr -> getName());
-                        if(payload.has_value()){
-                            inputRegPayload[inputRegPair.first] = payload;
-                        }
-                        regPtr -> pop();
-                    }
-                    regPtr -> releaseRead();
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 4.2.释放寄存器 " + regPtr -> getName());
-                }
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 5.查找计划唤醒任务");
-                wakeUpPayload.clear();
-                while(!wakeUpSchedule.empty() && wakeUpSchedule.top().first == minTime){
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 5.1.找到计划唤醒任务");
-                    wakeUpPayload.push_back(wakeUpSchedule.top().second);
-                    wakeUpSchedule.pop();
-                }
-                /* 将寄存器写请求构造出来 */
-                MODULE_LOG("loop " + std::to_string(loopCount) + " 6.查找寄存器写入任务");
-                pendingRegisterWrite.clear();
-                while(!registerWriteSchedule.empty() && std::get<0>(registerWriteSchedule.top()) == minTime){
-                    const auto& regWriteTuple = registerWriteSchedule.top();
-                    int id = std::get<1>(regWriteTuple);
-                    std::any payload = std::get<2>(regWriteTuple);
-                    bool terminate = std::get<3>(regWriteTuple);
-                    pendingRegisterWrite[id] = std::make_pair(payload, terminate);
-                    registerWriteSchedule.pop();
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 6.1.将写入寄存器 " + outputRegisterMap[id] -> getName());
-                }
-                if(minTime == MAX_TIME){
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 7.没有找到有效的 minTime，模块仿真结束");
-                    return;
-                } else if (internalFireTime > 0 && minTime <= internalFireTime){
-                    MODULE_LOG("loop " + std::to_string(loopCount) + " 7.找到有效的 minTime " + std::to_string(minTime) + " 但是早于上次 fire 时间 " + std::to_string(internalFireTime));
-                    throw std::runtime_error("time sequence error");
-                }
-                /* 记录（可能的）fire 时间 */
-                internalFireTime = minTime;
-                /* 如果有 payload 就 fire */
-                if(!inputRegPayload.empty() || !wakeUpPayload.empty()){
-                    try {
-                        MODULE_LOG("loop " + std::to_string(loopCount) + " 7.执行 fire， 本次启动时间 " + std::to_string(internalFireTime));
-                        fire();
-                    } catch (const std::exception& e){
-                        std::cerr << "Exception caught in Module fire: " << e.what() << std::endl;
-                        exit(1);
-                    }
-                }
-                /* 将 fire 产生和之前计划的寄存器写动作写出 */
-                for(const auto& outputRegPair: outputRegisterMap){
-                    int id = outputRegPair.first;
-                    if(pendingRegisterWrite.contains(id)){
-                        auto& writePair = pendingRegisterWrite[id];
-                        std::any payload = writePair.first;
-                        bool terminate = writePair.second;
-                        if(!terminate){
-                            MODULE_LOG("loop " + std::to_string(loopCount) + " 8.写输出寄存器 " + outputRegPair.second -> getName() + " 写入时间 " + std::to_string(internalFireTime+1));
-                            outputRegPair.second -> write(internalFireTime+1, payload);
-                        } else {
-                            MODULE_LOG("loop " + std::to_string(loopCount) + " 8.终止输出寄存器 " + outputRegPair.second -> getName() + " 写入时间 " + std::to_string(internalFireTime+1));
-                            outputRegPair.second -> terminate(internalFireTime+1);
-                            terminatedOutputRegNote[id] = true;
-                        }
-                    } else if(!terminatedOutputRegNote.contains(id)){ 
-                        /* 向所有没有写入的寄存器打入一个空的 time packet，
-                        这里并不检查这些寄存器的 activeTime，交给 register 中的逻辑自动丢弃较小的 time packet */
-                        MODULE_LOG("loop " + std::to_string(loopCount) + " 8.写输出寄存器 timepacket " + outputRegPair.second -> getName()+ " 写入时间 " + std::to_string(internalFireTime+1));
-                        outputRegPair.second -> write(internalFireTime+1, std::any());
-                    }
-                }
-                loopCount++;
-            }
-            
-        } catch (const std::exception& e){
-                        std::cerr << "Exception caught in Simulation: " << e.what() << std::endl;
-                        exit(1);
-                    }
-    }
+void Module::setNameAndParent(std::string _name,
+                              std::weak_ptr<Module> _parentPtr) {
+  name = _name;
+  parentPtr = _parentPtr;
 }
+
+int Module::assignInput(std::shared_ptr<Register> reg) {
+  int id = inputRegisterMap.size();
+  inputRegisterMap[id] = reg;
+  reg->connectAsInput(shared_from_this());
+  return id;
+}
+
+int Module::assignOutput(std::shared_ptr<Register> reg) {
+  int id = outputRegisterMap.size();
+  outputRegisterMap[id] = reg;
+  reg->connectAsOutput(shared_from_this());
+  return id;
+}
+
+std::shared_ptr<Register> Module::createRegister(std::string name) {
+  if (name == "") {
+    name =
+        std::string("anonymous_reg_") + std::to_string(childRegisterMap.size());
+  }
+  if (childRegisterMap.contains(name)) {
+    throw std::runtime_error("create Register name conflict!");
+  }
+  auto p = std::make_shared<Register>();
+  p->setName(name);
+  childRegisterMap[name] = p;
+  return p;
+}
+
+void Module::planWakeUp(Time_t delay, std::any wakeUpPayload) {
+  if (delay <= 0) {
+    throw std::runtime_error("delay should be positive");
+  }
+  wakeUpSchedule.push(std::make_pair(internalFireTime + delay, wakeUpPayload));
+}
+
+void Module::writeRegister(int id, std::any writePayload, Time_t delay,
+                           bool terminate) {
+  if (delay < 0) {
+    throw std::runtime_error("delay should not be negetive");
+  } else if (delay == 0) {
+    pendingRegisterWrite[id] = std::make_pair(writePayload, terminate);
+  } else {
+    registerWriteSchedule.push(
+        std::make_tuple(internalFireTime + delay, id, writePayload, terminate));
+  }
+}
+
+Time_t Module::whatTime() { return internalFireTime; }
+
+void Module::simulationLoop() {
+  try {
+    /** 在 wakeUpScheduler 中放一个 0 时刻的启动 */
+    wakeUpSchedule.push(std::make_pair(0, std::any()));
+    int loopCount = 0;  // 调试信息
+    // !inputRegisterMap.empty() ||
+    // !wakeUpSchedule.empty() ||
+    // !registerWriteSchedule.empty()
+    while (1) {
+      /* 计算最小唤醒时间 */
+      Time_t minTime = MAX_TIME;
+#if OPT_OPTIMISTIC_READ
+      inputRegLockedOptimistic.clear();
+#endif
+      MODULE_LOG("loop " + std::to_string(loopCount) + " 0.开始计算 minTime");
+      if (!wakeUpSchedule.empty()) {
+        Time_t wakeUpTime = wakeUpSchedule.top().first;
+        if (wakeUpTime < minTime) {
+          minTime = wakeUpTime;
+        }
+      }
+      MODULE_LOG("loop " + std::to_string(loopCount) +
+                 " 1.计划唤醒的 minTime= " +
+                 (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
+      for (const auto& inputRegPair : inputRegisterMap) {
+        if (minTime == 0) {
+          MODULE_LOG("loop " + std::to_string(loopCount) +
+                     " 1.1.申请寄存器锁被冷启动跳过");
+          break;
+        }
+        int regId = inputRegPair.first;
+        auto regPtr = inputRegPair.second;
+#if OPT_OPTIMISTIC_READ
+        if (inputRegActiveTimeOptimistic.contains(regId) &&
+            inputRegActiveTimeOptimistic[regId] > minTime) {
+          continue;
+        }
+#endif
+        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" +
+                   regPtr->getName());
+        regPtr->acquireRead();
+        if (regPtr->hasTerminated()) {
+          MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
+                     regPtr->getName() + " 已标记为终止，将移除");
+          terminatedInputRegNote.push_back(regId);  // 标记删除
+          regPtr->releaseRead();
+          continue;
+        }
+        Time_t regActiveTime = regPtr->getActiveTime();
+        MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
+                   regPtr->getName() + " 锁定成功");
+#if OPT_OPTIMISTIC_READ
+        inputRegLockedOptimistic[regId] = true;
+        inputRegActiveTimeOptimistic[regId] = regActiveTime;
+#endif
+        if (regActiveTime < minTime) {
+          minTime = regActiveTime;
+        }
+      }
+      // 根据 terminatedInputRegNote 删除已经终止的寄存器
+      for (const auto& id : terminatedInputRegNote) {
+        inputRegisterMap.erase(id);
+      }
+      terminatedInputRegNote.clear();
+      MODULE_LOG("loop " + std::to_string(loopCount) +
+                 " 2.输入寄存器的 minTime= " +
+                 (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
+      if (!registerWriteSchedule.empty()) {
+        Time_t writeTime = std::get<0>(registerWriteSchedule.top());
+        if (writeTime < minTime) {
+          minTime = writeTime;
+        }
+      }
+      MODULE_LOG("loop " + std::to_string(loopCount) +
+                 " 3.计划写入的（最终） minTime= " +
+                 (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
+      MODULE_LOG("loop " + std::to_string(loopCount) + " 4.读取寄存器");
+      /* 构造传给 fire 的 payload 列表 */
+      inputRegPayload.clear();
+      for (const auto& inputRegPair : inputRegisterMap) {
+        if (minTime == 0) {
+          break;
+        }
+#if OPT_OPTIMISTIC_READ
+        int regId = inputRegPair.first;
+        if (!inputRegLockedOptimistic.contains(regId)) {
+          continue;
+        }
+#endif
+        auto regPtr = inputRegPair.second;
+        Time_t regActiveTime = regPtr->getActiveTime();
+        std::any payload = regPtr->read();
+        if (regActiveTime == minTime) {
+          MODULE_LOG("loop " + std::to_string(loopCount) +
+                     " 4.1.读取并弹出寄存器 " + regPtr->getName());
+          if (payload.has_value()) {
+            inputRegPayload[inputRegPair.first] = payload;
+          }
+          regPtr->pop();
+        }
+        regPtr->releaseRead();
+        MODULE_LOG("loop " + std::to_string(loopCount) + " 4.2.释放寄存器 " +
+                   regPtr->getName());
+      }
+      MODULE_LOG("loop " + std::to_string(loopCount) + " 5.查找计划唤醒任务");
+      wakeUpPayload.clear();
+      while (!wakeUpSchedule.empty() && wakeUpSchedule.top().first == minTime) {
+        MODULE_LOG("loop " + std::to_string(loopCount) +
+                   " 5.1.找到计划唤醒任务");
+        wakeUpPayload.push_back(wakeUpSchedule.top().second);
+        wakeUpSchedule.pop();
+      }
+      /* 将寄存器写请求构造出来 */
+      MODULE_LOG("loop " + std::to_string(loopCount) + " 6.查找寄存器写入任务");
+      pendingRegisterWrite.clear();
+      while (!registerWriteSchedule.empty() &&
+             std::get<0>(registerWriteSchedule.top()) == minTime) {
+        const auto& regWriteTuple = registerWriteSchedule.top();
+        int id = std::get<1>(regWriteTuple);
+        std::any payload = std::get<2>(regWriteTuple);
+        bool terminate = std::get<3>(regWriteTuple);
+        pendingRegisterWrite[id] = std::make_pair(payload, terminate);
+        registerWriteSchedule.pop();
+        MODULE_LOG("loop " + std::to_string(loopCount) + " 6.1.将写入寄存器 " +
+                   outputRegisterMap[id]->getName());
+      }
+      if (minTime == MAX_TIME) {
+        MODULE_LOG("loop " + std::to_string(loopCount) +
+                   " 7.没有找到有效的 minTime，模块仿真结束");
+        return;
+      } else if (internalFireTime > 0 && minTime <= internalFireTime) {
+        MODULE_LOG("loop " + std::to_string(loopCount) +
+                   " 7.找到有效的 minTime " + std::to_string(minTime) +
+                   " 但是早于上次 fire 时间 " +
+                   std::to_string(internalFireTime));
+        throw std::runtime_error("time sequence error");
+      }
+      /* 记录（可能的）fire 时间 */
+      internalFireTime = minTime;
+      /* 如果有 payload 就 fire */
+      if (!inputRegPayload.empty() || !wakeUpPayload.empty()) {
+        try {
+          MODULE_LOG("loop " + std::to_string(loopCount) +
+                     " 7.执行 fire， 本次启动时间 " +
+                     std::to_string(internalFireTime));
+          fire();
+        } catch (const std::exception& e) {
+          std::cerr << "Exception caught in Module fire: " << e.what()
+                    << std::endl;
+          exit(1);
+        }
+      }
+      /* 将 fire 产生和之前计划的寄存器写动作写出 */
+      for (const auto& outputRegPair : outputRegisterMap) {
+        int id = outputRegPair.first;
+        if (pendingRegisterWrite.contains(id)) {
+          auto& writePair = pendingRegisterWrite[id];
+          std::any payload = writePair.first;
+          bool terminate = writePair.second;
+          if (!terminate) {
+            MODULE_LOG("loop " + std::to_string(loopCount) +
+                       " 8.写输出寄存器 " + outputRegPair.second->getName() +
+                       " 写入时间 " + std::to_string(internalFireTime + 1));
+            outputRegPair.second->write(internalFireTime + 1, payload);
+          } else {
+            MODULE_LOG("loop " + std::to_string(loopCount) +
+                       " 8.终止输出寄存器 " + outputRegPair.second->getName() +
+                       " 写入时间 " + std::to_string(internalFireTime + 1));
+            outputRegPair.second->terminate(internalFireTime + 1);
+            terminatedOutputRegNote[id] = true;
+          }
+        } else if (!terminatedOutputRegNote.contains(id)) {
+          /* 向所有没有写入的寄存器打入一个空的 time packet，
+          这里并不检查这些寄存器的 activeTime，交给 register
+          中的逻辑自动丢弃较小的 time packet */
+          MODULE_LOG("loop " + std::to_string(loopCount) +
+                     " 8.写输出寄存器 timepacket " +
+                     outputRegPair.second->getName() + " 写入时间 " +
+                     std::to_string(internalFireTime + 1));
+          outputRegPair.second->write(internalFireTime + 1, std::any());
+        }
+      }
+      loopCount++;
+    }
+
+  } catch (const std::exception& e) {
+    std::cerr << "Exception caught in Simulation: " << e.what() << std::endl;
+    exit(1);
+  }
+}
+}  // namespace wolf_sim

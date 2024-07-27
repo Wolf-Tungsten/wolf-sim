@@ -3,11 +3,9 @@
 
 #include <cstdint>
 #include <limits>
-#include <cassert>
-
 
 #define OPT_OPTIMISTIC_READ 0
-#define ENABLE_MODULE_LOG 1
+#define ENABLE_MODULE_LOG 0
 
 namespace wolf_sim {
     using Time_t = int64_t;
