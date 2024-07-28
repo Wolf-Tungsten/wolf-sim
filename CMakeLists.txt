@@ -11,7 +11,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ramulator/src)
 set(ASYNC_SIMPLE_BUILD_DEMO_EXAMPLE OFF)
 
 # CMakeLists.txt
-option(USE_ASAN "Enable AddressSanitizer" OFF)
+option(USE_ASAN "Enable AddressSanitizer" ON)
 
 if (USE_ASAN)
     message(STATUS "AddressSanitizer enabled")

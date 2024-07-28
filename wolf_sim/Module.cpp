@@ -258,9 +258,16 @@ void Module::simulationLoop() {
     }
   } catch (const SimulationTerminateException& e) {
     MODULE_LOG("SimulationLoop terminated");
+    if(!hasTerminated){
+      /* 如果是自然结束的情况会执行到这里，将所有输出寄存器设置为终止 */
+      for(const auto& outputRegPair: outputRegisterMap){
+        outputRegPair.second->terminationNotify();
+      }
+    }
   } catch (const std::exception& e) {
     std::cerr << "Exception caught in Simulation: " << e.what() << std::endl;
     exit(1);
   }
+  finalStop();
 }
 }  // namespace wolf_sim

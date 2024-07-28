@@ -9,7 +9,9 @@ class ChildProducer : public wolf_sim::Module {
     void fire() {
         payloadOPort << payload;
         payload++;
-        planWakeUp(5);
+        if(payload < 10) {
+            planWakeUp(5);
+        }
     }
 };
 
@@ -31,9 +33,6 @@ class ChildConsumer : public wolf_sim::Module {
         int payload;
         if (payloadIPort >> payload) {
             std::cout << "ChildConsumer got payload " << payload << " at " << whatTime() << std::endl;
-            if(payload == 10) {
-                terminate();
-            }
         }
     }
 };
@@ -57,6 +56,9 @@ class Top : public wolf_sim::Module {
         auto reg = createRegister("reg");
         parentProducer->payloadOPort >>= reg;
         parentConsumer->payloadIPort <<= reg;
+    }
+    void finalStop() {
+        std::cout << "Top terminated at " << whatTime() << std::endl;
     }
 };
 

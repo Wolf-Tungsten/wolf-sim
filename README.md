@@ -30,6 +30,7 @@
   - [Module 的 `construct()` 方法](#module-的-construct-方法)
     - [创建子模块](#创建子模块)
     - [创建寄存器](#创建寄存器)
+  - [Module 的 `finalStop()` 方法](#module-的-finalstop-方法)
 
 ## 快速认识三个基础组件
 
@@ -328,6 +329,11 @@ class MyModule : public wolf_sim::Module {
     //   planWakeUp(delay);
     // }
   }
+  /* 在模块仿真结束后调用 */
+  void finalStop() {
+    // 在这里可以进行一些数据收集、上报工作，例如将仿真结果写入文件
+    // 注意 finalStop() 仍然是多线程进行的，需要处理好线程安全问题
+  }
 };
 ```
 
@@ -565,6 +571,11 @@ Module 的 `fire()` 方法描述模块的仿真行为，由仿真内核调用。
     }
   }
 ```
+
+`terminate()` 方法会关闭整个仿真系统，使得 `env.run()` 返回。
+
+Wolf-Sim 也支持自动仿真终止，当系统中不再有计划的任务和数据交换时，仿真会自动终止。
+
 ## Module 的 `construct()` 方法
 
 Module 的 `construct()` 方法建立子结构并描述子结构之间的连接关系。
@@ -594,6 +605,14 @@ Module 的 `construct()` 方法建立子结构并描述子结构之间的连接�
     auto myRegister = createRegister("MyRegister");
   }
 ```
+
+## Module 的 `finalStop()` 方法
+
+无论是仿真被手动终止还是自动终止，模块仿真结束时都会调用 `finalStop()` 方法。
+
+在 `finalStop()` 方法中，我们可以进行一些数据收集、上报工作，例如将仿真结果写入文件，或者在全局变量中记录仿真结果。
+
+需要注意的是，`finalStop()` 方法仍然是多线程进行的，需要处理好线程安全问题。
 
 
 

@@ -189,6 +189,7 @@ class Module : public std::enable_shared_from_this<Module> {
   std::map<int, std::any> inputRegPayload;
   std::vector<std::any> wakeUpPayload;
   virtual void fire() {};
+  virtual void finalStop() {};
 
   template <typename ModuleDerivedType>
   std::shared_ptr<ModuleDerivedType> createChildModule(std::string name = "") {

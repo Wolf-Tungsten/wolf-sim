@@ -28,22 +28,29 @@ namespace wolf_sim
         while(payloadQueue.empty() && !terminated){
             condWaitActive.wait(lock);
         }
-        if(terminated){
-            throw Module::SimulationTerminateException();
-        }
+
     }
 
     Time_t Register::getActiveTime() {
+        if(terminated && payloadQueue.empty()){
+            return MAX_TIME;
+        }
         /** 需要 acquireRead 保护，一定不会为空 */
         return payloadQueue.front().first;
     }
 
     std::any Register::read() {
+        if(terminated && payloadQueue.empty()){
+            return std::any();
+        }
         /** 需要 acquireRead 保护，一定不会为空 */
         return payloadQueue.front().second;
     }
 
     void Register::pop() {
+        if(terminated && payloadQueue.empty()){
+            return;
+        }
         /** 需要 acquireRead 保护，一定不会为空 */
         payloadQueue.pop_front();
     }
