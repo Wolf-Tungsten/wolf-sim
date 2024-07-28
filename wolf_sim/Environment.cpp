@@ -5,7 +5,6 @@
 #include "Environment.h"
 
 namespace wolf_sim {
-Environment::Environment(int _threadNum) : threadNum(_threadNum) {};
 
 void Environment::addTopModule(std::shared_ptr<Module> topModulePtr) {
   addModule(topModulePtr);

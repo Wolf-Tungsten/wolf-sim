@@ -13,6 +13,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <type_traits>
 
 #include "wolf_sim.h"
 
