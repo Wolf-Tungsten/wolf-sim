@@ -60,12 +60,7 @@ class RegReadRef {
   void operator <<= (std::shared_ptr<Register> regPtr) {
     connect(regPtr);
   }
-  bool valid() {
-    if (id == -1) {
-      throw std::runtime_error("port not connected");
-    }
-    return mPtr->inputRegPayload.contains(id);
-  }
+  
   T read() {
     if (id == -1) {
       throw std::runtime_error("port not connected");
@@ -78,10 +73,28 @@ class RegReadRef {
       throw std::runtime_error("port not connected");
     }
     if(mPtr->inputRegPayload.contains(id)){
+      // 这里不用检查 has_value，因为 inputRegPayload 一定有值
         value = std::any_cast<T>(mPtr->inputRegPayload[id]);
         return true;
     }
     return false;
+  }
+
+  // 只有在 T 可转换为 bool 时才有效的成员函数
+  template <typename U = T>
+  typename std::enable_if<std::is_convertible<U, bool>::value, bool>::type valid() {
+    if (id == -1) {
+      throw std::runtime_error("port not connected");
+    }
+    return mPtr->inputRegPayload.contains(id) && static_cast<bool>(std::any_cast<U>(mPtr->inputRegPayload[id]));
+  }
+
+  template <typename U = T>
+  typename std::enable_if<!std::is_convertible<U, bool>::value, bool>::type valid() {
+    if (id == -1) {
+      throw std::runtime_error("port not connected");
+    }
+    return mPtr->inputRegPayload.contains(id);
   }
 
  private:
@@ -147,11 +160,10 @@ class Module : public std::enable_shared_from_this<Module> {
              std::to_string(childModuleMap.size());
     }
     if (childModuleMap.contains(name)) {
-      throw std::runtime_error("create Module name conflict!");
+      throw std::runtime_error("child module name conflict!");
     }
     auto p = std::make_shared<ModuleDerivedType>();
     childModuleMap[name] = p;
-    p->construct();
     p->setNameAndParent(name, shared_from_this());
     return p;
   };

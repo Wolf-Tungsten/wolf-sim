@@ -1,21 +1,21 @@
-#include <functional>
 #include <iostream>
-#include <memory>
-
 #include "wolf_sim/wolf_sim.h"
 
 class Producer : public wolf_sim::Module {
  public:
+  /* 端口定义部分 */
   IPort(readyIPort, bool);
   OPort(payloadOPort, int);
 
  private:
+  /* 根据需要定义的状态 */
   int payload;
+  /* 描述模块行为的 fire 函数 */
   void fire() {
-    bool isConsumerReady;
-    if (readyIPort >> isConsumerReady) {
+    if (readyIPort.valid()) {
+      /* 判断 readyIPort 上是否有效输入 */
       std::cout << "Producer got ready signal at " << whatTime()
-                << " and sent payload " << payload << std::endl;
+              << " and sent payload " << payload << std::endl;
       payloadOPort << payload;
       payload++;
     }
@@ -50,8 +50,8 @@ class Consumer : public wolf_sim::Module {
       if (payloadIPort >> pendingPayload) {
         pending = true;
         doneTime = whatTime() + 10;
-        std::cout << "Consumer got payload " << pendingPayload
-                  << " at " << whatTime() << std::endl;
+        std::cout << "Consumer got payload " << pendingPayload << " at "
+                  << whatTime() << std::endl;
         planWakeUp(10);
       } else {
         std::cout << "Consumer sent ready signal at " << whatTime()
@@ -63,7 +63,7 @@ class Consumer : public wolf_sim::Module {
 };
 
 class Top : public wolf_sim::Module {
- public:
+ private:
   void construct() {
     auto producer = createChildModule<Producer>("Producer");
     auto consumer = createChildModule<Consumer>("Consumer");
