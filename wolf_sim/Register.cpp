@@ -6,8 +6,6 @@ namespace wolf_sim
     Register::Register() {
         lastWriteTime = -1;
         terminated = false;
-        asInputConnected = false;
-        asOutputConnected = false;
     }
 
     void Register::setName(std::string _name) {
@@ -18,19 +16,11 @@ namespace wolf_sim
     }
 
     void Register::connectAsInput(std::weak_ptr<Module> modulePtr) {
-        if(asInputConnected){
-            throw std::runtime_error("This register is already used as an input for another module.");
-        }
         outputToPtr = modulePtr;
-        asInputConnected = true;
     }
 
     void Register::connectAsOutput(std::weak_ptr<Module> modulePtr) {
-        if(asOutputConnected){
-            throw std::runtime_error("This register is already used as an output for another module.");
-        }
         inputFromPtr = modulePtr;
-        asOutputConnected = true;
     }
 
     void Register::acquireRead() {

@@ -55,12 +55,31 @@ template <typename T>
 class RegReadRef {
  public:
   RegReadRef(Module* _mPtr) : mPtr(_mPtr), id(-1) {};
+
   void connect(std::shared_ptr<Register> regPtr) {
     id = mPtr->assignInput(regPtr);
   }
+
+  std::shared_ptr<Register> eject() {
+    if (id == -1) {
+      throw std::runtime_error("port not connected");
+    }
+    auto regPtr = mPtr->ejectInput(id);
+    id = -1;
+    return regPtr;
+  }
+
   void operator <<= (std::shared_ptr<Register> regPtr) {
     connect(regPtr);
   }
+
+  void operator >>= (RegReadRef<T>& childReadRef) {
+    childReadRef.connect(eject());
+  }
+
+  // void operator <<= (RegWriteRef<T>& parentWriteRef) {
+  //   connect(parentWriteRef.eject());
+  // }
   
   T read() {
     if (id == -1) {
@@ -107,13 +126,32 @@ template <typename T>
 class RegWriteRef {
  public:
   RegWriteRef(Module* _mPtr) : mPtr(_mPtr), id(-1) {};
+
   void connect(std::shared_ptr<Register> regPtr) {
     id = mPtr->assignOutput(regPtr);
   }
-  std::shared_ptr<Register>& operator >>= (std::shared_ptr<Register>& regPtr) {
-    connect(regPtr);
+
+  std::shared_ptr<Register> eject() {
+    if (id == -1) {
+      throw std::runtime_error("port not connected");
+    }
+    auto regPtr = mPtr->ejectOutput(id);
+    id = -1;
     return regPtr;
   }
+
+  void operator >>= (std::shared_ptr<Register>& regPtr) {
+    connect(regPtr);
+  }
+
+  void operator >>= (RegWriteRef<T>& parentWriteRef) {
+    connect(parentWriteRef.eject());
+  }
+
+  // void operator <<= (RegReadRef<T>& childReadRef) {
+  //   childReadRef.connect(eject());
+  // }
+
   void write(T writePayload, Time_t delay = 0) {
     if (id == -1) {
       throw std::runtime_error("port not connected");
@@ -206,8 +244,12 @@ class Module : public std::enable_shared_from_this<Module> {
                       std::vector<std::tuple<Time_t, int, std::any>>,
                       EarliestRegisterWriteComparator>
       registerWriteSchedule;
+  int nextInputId = 0;
+  int nextOutputId = 0;
   int assignInput(std::shared_ptr<Register> regPtr);
   int assignOutput(std::shared_ptr<Register> regPtr);
+  std::shared_ptr<Register> ejectInput(int id);
+  std::shared_ptr<Register> ejectOutput(int id);
   void simulationLoop();
 };
 

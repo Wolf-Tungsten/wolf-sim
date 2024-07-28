@@ -41,8 +41,6 @@ namespace wolf_sim
         void terminationNotify();
     private:
         std::string name;
-        bool asInputConnected;
-        bool asOutputConnected;
         std::weak_ptr<Module> outputToPtr;
         std::weak_ptr<Module> inputFromPtr;
         std::deque<std::pair<Time_t, std::any>> payloadQueue;

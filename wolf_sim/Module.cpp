@@ -9,17 +9,35 @@ void Module::setNameAndParent(std::string _name,
 }
 
 int Module::assignInput(std::shared_ptr<Register> reg) {
-  int id = inputRegisterMap.size();
+  int id = nextInputId++;
   inputRegisterMap[id] = reg;
   reg->connectAsInput(shared_from_this());
   return id;
 }
 
 int Module::assignOutput(std::shared_ptr<Register> reg) {
-  int id = outputRegisterMap.size();
+  int id = nextOutputId++;
   outputRegisterMap[id] = reg;
   reg->connectAsOutput(shared_from_this());
   return id;
+}
+
+std::shared_ptr<Register> Module::ejectInput(int id){
+  if (!inputRegisterMap.contains(id)) {
+    throw std::runtime_error("input register not found");
+  }
+  auto regPtr = inputRegisterMap[id];
+  inputRegisterMap.erase(id);
+  return regPtr;
+}
+
+std::shared_ptr<Register> Module::ejectOutput(int id){
+  if (!outputRegisterMap.contains(id)) {
+    throw std::runtime_error("output register not found");
+  }
+  auto regPtr = outputRegisterMap[id];
+  outputRegisterMap.erase(id);
+  return regPtr;
 }
 
 std::shared_ptr<Register> Module::createRegister(std::string name) {

@@ -1,7 +1,7 @@
 # Wolf-Sim：一个C++并行离散事件框架
 
 - [Wolf-Sim：一个C++并行离散事件框架](#wolf-sim一个c并行离散事件框架)
-  - [认识三个基础组件](#认识三个基础组件)
+  - [快速认识三个基础组件](#快速认识三个基础组件)
     - [Module](#module)
     - [Register](#register)
     - [Environment](#environment)
@@ -11,16 +11,36 @@
     - [定义消费者模块](#定义消费者模块)
     - [定义顶层模块](#定义顶层模块)
     - [启动仿真](#启动仿真)
+  - [复制这些代码创建你的模块](#复制这些代码创建你的模块)
+  - [复制这些代码，创建你的 main 函数](#复制这些代码创建你的-main-函数)
+  - [Module 的端口系统](#module-的端口系统)
+    - [端口的读写](#端口的读写)
+      - [基本的读写操作](#基本的读写操作)
+      - [带延迟的端口写操作](#带延迟的端口写操作)
+    - [端口的连接](#端口的连接)
+      - [通过寄存器的端口连接](#通过寄存器的端口连接)
+      - [不通过寄存器的端口连接](#不通过寄存器的端口连接)
+      - [如何理解 ToChildPort 和 FromChildPort](#如何理解-tochildport-和-fromchildport)
+    - [端口组](#端口组)
+  - [Module 的 `fire()` 方法](#module-的-fire-方法)
+    - [查看当前仿真时间](#查看当前仿真时间)
+    - [向输出端口写数据](#向输出端口写数据)
+    - [Module 的计划唤醒](#module-的计划唤醒)
+    - [终止仿真](#终止仿真)
+  - [Module 的 `construct()` 方法](#module-的-construct-方法)
+    - [创建子模块](#创建子模块)
+    - [创建寄存器](#创建寄存器)
 
-## 认识三个基础组件
+## 快速认识三个基础组件
 
 ### Module
 
 Wolf-Sim 构造的仿真系统是由多个 Module 子类的实例组成的：
 
-1. Module 在 `fire()` 方法中描述自己的行为；
-2. Module 可递归地包含 **子 Module** ，在 `construct()` 方法中创建 **子 Module** 并描述 **子 Module** 之间的连接关系；
-3. 一个仿真系统中的 Module 呈现树状结构，根节点称为 **顶层 Module**。
+1. Module 可以定义输入端口和输出端口，用于与其他 Module 交换数据；
+2. Module 在 `fire()` 方法中描述自己的行为；
+3. Module 可递归地包含 **子 Module** ，在 `construct()` 方法中创建 **子 Module** 并描述 **子 Module** 之间的连接关系；
+4. 一个仿真系统中的 Module 呈现树状结构，根节点称为 **顶层 Module**。
 
 Wolf-Sim 中的 Module 可类比于 Verilog 中的模块，或 SystemC 中的模块。
 
@@ -263,6 +283,315 @@ int main() {
 * 然后，我们使用 `std::make_shared<Top>()` 创建了一个顶层模块 Top 的智能指针 top。
 * 最后，我们将 top 添加到 env 中，调用 `env.run()` 启动仿真。
 
+## 复制这些代码创建你的模块
+
+```cpp
+#include "wolf_sim.h"
+
+class MyModule : public wolf_sim::Module {
+ public:
+  /* 端口定义部分 */
+  // IPort(portName, type);
+  // IPortArray(portName, type, arraySize);
+  // OPort(portName, type);
+  // OPortArray(portName, type, arraySize);
+  // FromChildPort(portName, type);
+  // FromChildPortArray(portName, type, arraySize);
+  // ToChildPort(portName, type);
+  // ToChildPortArray(portName, type, arraySize);
+
+ private:
+  /* 根据仿真行为需要自定义的状态 */
+  // some custom code
+  /* 描述子结构的 construct 函数 */
+  void construct() {
+    // auto childModuleA = createChildModule<ChildModule>("ChildModuleNameA");
+    // auto childModuleB = createChildModule<ChildModule>("ChildModuleNameB");
+    // auto myRegister = createRegister("MyRegister");
+    // childModuleA->outputPort >>= myRegister;
+    // childModuleB->inputPort <<= myRegister;
+    
+    // toChildPort >>= myRegister;
+    // childModuleA->fromParentPort <<= myRegister;
+    // childModuleB->toParentPort >>= myRegister;
+    // fromChildPort <<= myRegister;
+
+    // myInputPort >>= childModuleA->inputPort;
+    // childModuleB->outputPort >>= myOutputPort;
+  }
+  /* 描述模块行为的 fire 函数 */
+  void fire() {
+    // Time_t currentTime = whatTime();
+    // if (inputPort >> data) {
+    //   outputPort << data;
+    //   outputPort.write(data, delay);
+    //   planWakeUp(delay);
+    // }
+  }
+};
+```
+
+## 复制这些代码，创建你的 main 函数
+
+```
+int main() {
+  wolf_sim::Environment env;
+  auto top = std::make_shared<TopModule>();
+  env.addTopModule(top);
+  env.run();
+}
+```
+
+## Module 的端口系统
+
+Wolf-Sim 提供了八个宏来定义模块的输入输出端口：
+
+```cpp
+IPort(portName, type) // 输入端口
+OPort(portName, type) // 输出端口
+
+FromChildPort(portName, type) // 从子模块读取数据的端口
+ToChildPort(portName, type) // 向子模块写入数据的端口
+
+IPortArray(portName, type, arraySize) // 输入端口组
+OPortArray(portName, type, arraySize) // 输出端口组
+
+FromChildPortArray(portName, type, arraySize) // 从子模块读取数据的端口组
+ToChildPortArray(portName, type, arraySize) // 向子模块写入数据的端口组
+```
+
+IPort 和 OPort 是模块对外的输入输出接口。
+
+如果模块包含子模块，并且希望在 fire 过程中与子模块交互，则需要定义 FromChildPort 和 ToChildPort，并在 construct 函数中通过寄存器建立连接。
+
+### 端口的读写
+
+在 Module 的 fire 方法中，可对端口进行读写。
+
+端口的读写是 Module 在仿真过程中与其他 Module 交换数据的唯一方式。
+
+#### 基本的读写操作
+
+端口的写操作使用 `<<` 操作符：
+
+```cpp
+  portName << data;
+```
+
+端口的读操作使用 `>>` 操作符，假设端口的数据类型为 T：
+
+```cpp
+  T data;
+  if(portName >> data) {
+    // 读取成功，可访问 data
+  }
+```
+为什么要用 if 语句包裹读取操作？假如一个 Module 有多个输入端口，或者存在计划唤醒，那么 fire 被调用时，端口上可能没有数据到达。
+
+当没有数据到达时，>> 表达式会**返回 false**，**data 的值不会被修改**。
+
+对于 bool 型端口，可以使用 valid() 判断端口是否有数据到达，且数据是否为 true，这对于握手信号建模场景非常有用：
+
+```cpp
+  if(portName.valid()) {
+    // 端口输入有效
+  }
+```
+
+#### 带延迟的端口写操作
+
+有的时候，我们希望在一定延迟之后写出数据，例如建模一个流水线，可通过 write 方法实现：
+
+```cpp
+  portName.write(data, delay);
+```
+
+### 端口的连接
+
+端口的连接在 construct 方法中进行，不需要在意连接建立的先后顺序，Wolf-Sim 会自动处理细节保证连接成功。
+
+#### 通过寄存器的端口连接
+
+绝大多数连接需要通过寄存器实现，寄存器是 Wolf-Sim 中的数据交换中介。
+
+寄存器的创建：
+
+```cpp
+  auto myRegister = createRegister("myRegister");
+```
+
+提供了 `<<=` 和 `>>=` 操作符，实现端口和寄存器的连接，使用这些操作符时，记住以下口诀：
+
+**端口在左，寄存器在右，箭头指向，数据流向**
+
+下面是一些例子。
+
+子模块的输出端口连接到寄存器：
+  
+```cpp
+  childModule->outputPort >>= myRegister;
+```
+
+寄存器连接到子模块的输入端口：
+  
+  ```cpp
+    childModule->inputPort <<= myRegister;
+  ```
+
+模块的 ToChildPort 通过寄存器连接到子模块的输入端口：
+  
+  ```cpp
+    toChildPort >>= myRegister;
+    childModule->inputPort <<= myRegister;
+  ```
+
+模块的 FromChildPort 通过寄存器连接到父模块的输出端口：
+  
+  ```cpp
+    childModule->outputPort >>= myRegister;
+    fromChildPort <<= myRegister;
+  ```
+
+#### 不通过寄存器的端口连接
+
+仅适用于父子模块之间同方向端口的连接。
+
+适用于父模块包装子模块时，希望直接将子模块端口暴露到父模块外部的场景（[例子](example/parent_child.cpp)）。
+
+需要在父模块上定义端口，然后在 construct 方法中使用 `>>=` 操作符连接，记住以下口诀：
+
+**箭头向右，数据向右**
+
+```cpp
+  IPort(parentInputPort, int);
+  OPort(parentOutputPort, int);
+
+  void construct() {
+    parentInputPort >>= childModule->inputPort;
+    childModule->outputPort >>= parentOutputPort;
+  }
+```
+
+#### 如何理解 ToChildPort 和 FromChildPort
+
+当模块的 fire 方法需要和子模块交换数据时，使用 ToChildPort 和 FromChildPort。
+
+ToChildPort 表示向子模块写入数据，FromChildPort 表示从子模块读取数据。
+
+ToChildPort 实际上是 OPort 的别名，FromChildPort 实际上是 IPort 的别名。
+
+### 端口组
+
+由于端口的数据类型可以包含 vector、array 等容器，如果端口就能满足你的需求，那么不要使用端口组。
+
+端口组包含多个端口，每个端口在仿真内核中是独立握手的，所以不必要的端口组使用会增加仿真内核的负担。
+
+事实上，端口组只是把端口放到了 std::vector 里，所以说只需要指定下标，就可以像操作端口组中的单个端口了：
+
+```cpp
+  IPortArray(inputPortArray, int, 10);
+  OPortArray(outputPortArray, int, 10);
+
+  void fire() {
+    for (int i = 0; i < 10; i++) {
+      if (inputPortArray[i] >> data) {
+        // 读取成功
+      }
+    }
+  }
+```
+
+## Module 的 `fire()` 方法
+
+Module 的 `fire()` 方法是描述模块的仿真行为，由仿真内核调用。
+
+`fire()` 方法在三种情况下被仿真内核调用：
+
+1. 仿真的 0 时刻；
+2. 模块的输入端口（IPort, IPortArray, FromChildPort, FromChildPortArray）有数据到达时；
+3. 模块被计划唤醒时。
+
+在 `fire()` 方法中，我们可以进行以下操作：
+
+1. 查看当前仿真时间；
+2. 操作自定义的状态；
+3. 读取输入端口的数据；
+4. 向输出端口（OPort, OPortArray, ToChildPort, ToChildPortArray）写入数据；
+5. 计划自己的唤醒；
+6. 终止仿真。
+
+### 查看当前仿真时间
+
+在 `fire()` 方法中，我们可以通过 `whatTime()` 方法查看当前仿真时间：
+
+```cpp
+  void fire() {
+    wolf_sim::Time_t now = whatTime();
+    std::cout << "Current time is " << now<< std::endl;
+  }
+```
+
+在单次 fire 调用过程中 `whatTime()` 返回的时间是恒定的。
+
+在连续的 fire 调用过程中，`whatTime()` 返回的时间是严格递增的。
+
+### 向输出端口写数据
+
+通过[操作输出端口](#基本的读写操作)我们可以向输出端口写入数据，**当前时刻**写入的数据，会在**下一时刻**被接受方读取。
+
+### Module 的计划唤醒
+
+在 `fire()` 方法中，我们可以通过 `planWakeUp(delay)` 方法计划自己的唤醒：
+
+```cpp
+  void fire() {
+    // do something
+    planWakeUp(10); // 10 个时间单位后唤醒
+  }
+```
+
+这意味着，在10个周期后，即使输入端口没有输入，fire 也会被调用一次。
+
+### 终止仿真
+
+可以在任意模块的 `fire()` 方法中调用 `terminate()` 方法终止仿真：
+
+```cpp
+  void fire() {
+    if (condition) {
+      terminate();
+    }
+  }
+```
+## Module 的 `construct()` 方法
+
+Module 的 `construct()` 方法建立子结构并描述子结构之间的连接关系。
+
+在 `construct()` 方法中，我们可以进行以下操作：
+
+1. 创建子模块
+2. 创建寄存器
+3. [建立连接](#端口的连接)。
+
+### 创建子模块
+
+在 `construct()` 方法中，我们可以通过 `createChildModule<T>(std::string name)` 方法创建子模块：
+
+```cpp
+  void construct() {
+    auto childModule = createChildModule<ChildModule>("ChildModuleName");
+  }
+```
+
+### 创建寄存器
+
+在 `construct()` 方法中，我们可以通过 `createRegister(std::string name)` 方法创建寄存器：
+
+```cpp
+  void construct() {
+    auto myRegister = createRegister("MyRegister");
+  }
+```
 
 
 
