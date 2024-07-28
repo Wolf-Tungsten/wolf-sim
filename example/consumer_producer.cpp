@@ -59,9 +59,9 @@ class Consumer : public wolf_sim::Module {
                   << " processing at " << whatTime() << std::endl;
         pending = false; /* 模拟处理完成 */
         if (pendingPayload == 10) {
-          /* 如果处理的是最后一个任务，调用 terminate() 仿真终止 */
+          /* 如果处理的是最后一个任务，调用 terminateSimulation() 仿真终止 */
           std::cout << "Consumer terminated at " << whatTime() << std::endl;
-          terminate();
+          terminateSimulation();
         } else {
           /* 否则继续发出 ready 信号通知 Producer */
           readyOPort << true;

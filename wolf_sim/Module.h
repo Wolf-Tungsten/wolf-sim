@@ -210,7 +210,8 @@ class Module : public std::enable_shared_from_this<Module> {
   std::shared_ptr<Register> createRegister(std::string name = "");
   void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
   void writeRegister(int id, std::any writePayload, Time_t delay = 1);
-  void terminate();
+  void terminateSimulation();
+  void terminateModuleSimulation();
 
  private:
   void moduleLog(std::string msg) {

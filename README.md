@@ -156,9 +156,9 @@ class Consumer : public wolf_sim::Module {
         pending = false; 
         /* 模拟处理完成 */
         if (pendingPayload == 10) {
-          /* 如果处理的是最后一个任务，调用 terminate() 仿真终止 */
+          /* 如果处理的是最后一个任务，调用 terminateSimulation() 仿真终止 */
           std::cout << "...terminate msg...";
-          terminate();
+          terminateSimulation();
         } else {
           /* 否则继续发出 ready 信号通知 Producer */
           readyOPort << true;
@@ -218,9 +218,9 @@ class Consumer : public wolf_sim::Module {
           pending = false; 
           /* 模拟处理完成 */
           if (pendingPayload == 10) {
-            /* 如果处理的是最后一个任务，调用 terminate() 仿真终止 */
+            /* 如果处理的是最后一个任务，调用 terminateSimulation() 仿真终止 */
             std::cout << "...terminate msg...";
-            terminate();
+            terminateSimulation();
           } else {
             /* 否则继续发出 ready 信号通知 Producer */
             readyOPort << true;
@@ -234,7 +234,7 @@ class Consumer : public wolf_sim::Module {
 
   * `if (whatTime() == doneTime)` 我们检查当前仿真时间是否等于先前记录的处理完成时间，如果是，我们会进入 if 分支；否则，我们会进入 else 分支，也就意味本次 fire 函数调用结束，什么也不做。在这个例子中，由于 Producer 只在 Consumer 准备好时发送数据，所以我们不应该进入到这个 else 分支，我们在这里抛出一个异常。
   * 在 if 分支中，我们模拟 payload 处理完成的过程，输出到控制台，清除 pending 状态。
-  * 如果 pendingPayload 是 10，也就是最后一个任务，我们调用 `terminate()` 函数终止仿真，这是 Wolf-Sim 中标准的仿真结束方法。
+  * 如果 pendingPayload 是 10，也就是最后一个任务，我们调用 `terminateSimulation()` 函数终止仿真，这是 Wolf-Sim 中标准的仿真结束方法。
   * 如果 pendingPayload 不是 10，我们向 readyOPort 发送 ready 信号，通知 Producer 模块可以发送下一个 payload。`readyOPort << true` 是 Wolf-Sim 标准的输出写入方法。
 
 ### 定义顶层模块
@@ -562,19 +562,31 @@ Module 的 `fire()` 方法描述模块的仿真行为，由仿真内核调用。
 
 ### 终止仿真
 
-可以在任意模块的 `fire()` 方法中调用 `terminate()` 方法终止仿真：
+可以在任意模块的 `fire()` 方法中调用 `terminateSimulation()` 方法终止仿真：
 
 ```cpp
   void fire() {
     if (condition) {
-      terminate();
+      terminateSimulation();
     }
   }
 ```
 
-`terminate()` 方法会关闭整个仿真系统，使得 `env.run()` 返回。
+`terminateSimulation()` 方法会关闭整个仿真系统，使得 `env.run()` 返回。
 
-Wolf-Sim 也支持自动仿真终止，当系统中不再有计划的任务和数据交换时，仿真会自动终止。
+也可以使用 `terminateModuleSimulation()` 终止当前 Module 的仿真，让其他模块继续运行：
+
+```cpp
+  void fire() {
+    if (condition) {
+      terminateModuleSimulation();
+    }
+  }
+```
+
+Wolf-Sim 也支持自动仿真终止，但在数据流向存在环路的系统中可能会失效。
+
+所以，我们建议在需要终止仿真的情况下主动调用 `terminateSimulation()` 或 `terminateModuleSimulation()`。
 
 ## Module 的 `construct()` 方法
 

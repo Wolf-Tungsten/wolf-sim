@@ -72,9 +72,14 @@ void Module::writeRegister(int id, std::any writePayload, Time_t delay) {
   }
 }
 
-void Module::terminate() {
-  terminationNotify();
+void Module::terminateSimulation() {
+  terminationNotify(); // 向上向下通知所有模块准备终止
   // 额外抛出异常
+  throw SimulationTerminateException();
+}
+
+void Module::terminateModuleSimulation() {
+  // 只终止当前模块
   throw SimulationTerminateException();
 }
 
@@ -259,7 +264,7 @@ void Module::simulationLoop() {
   } catch (const SimulationTerminateException& e) {
     MODULE_LOG("SimulationLoop terminated");
     if(!hasTerminated){
-      /* 如果是自然结束的情况会执行到这里，将所有输出寄存器设置为终止 */
+      /* 如果是自然结束或者模块终止的情况会执行到这里，将所有输出寄存器设置为终止 */
       for(const auto& outputRegPair: outputRegisterMap){
         outputRegPair.second->terminationNotify();
       }
