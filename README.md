@@ -203,8 +203,8 @@ class Consumer : public wolf_sim::Module {
 
   * `if (payloadIPort >> pendingPayload) {...}` 利用了 Wolf-Sim 中标准的输入读取方法，该方法通过重载的 `>>` 操作符实现。如果 payloadIPort 上有数据到达，那么 pendingPayload 将被赋值为 payloadIPort 上的数据，并且表达式返回 true。否则，pendingPayload 变量值不会被修改，表达式返回 false。也就意味着，当输入数据有效时，我们会进入到这个分支。
   * 你可能注意到，在 [Producer](#从定义生产者模块开始) 中，我们使用的不是 `>>` 操作符，而是 `readyIPort.valid()` 函数。这是 Wolf-Sim 对于 bool 型输入端口的特殊处理，因为 bool 型输入端口只有两种状态，所以我们不需要读取具体的数据，只需要知道端口是否有数据到达即可。
-  * `doneTime = whatTime() + 10; ` 在 fire 函数中，`whatTime()` 函数返回当前仿真时间。我们记录下当前时间加上 10 个时间单位，表示处理完成时间。
-  * `planWakeUp(10)` 表示我们计划在当前 payload 处理完成，也就是 10 个时间单位后再次唤醒消费者模块。
+  * `doneTime = whatTime() + 10; ` 在 fire 函数中，`whatTime()` 函数返回当前仿真时间。我们记录下当前时间加上 10 个时间单位，表示处理完成时间。注意，doneTime 只是这个仿真模型中的自定义状态，不会影响仿真内核的行为。
+  * 真正确保 10 个时间单位后会再次 fire 的动作是 `planWakeUp(10)`。
   * 如果 payloadIPort 上没有新的 payload，那么我们会进入 else 分支，在这里，我们向 readyOPort 发送 ready 信号，通知 Producer 模块可以发送 payload。
   * 从 fire 函数调用的时机角度分析，当 fire 是在输入端口有数据到达时被调用，我们会进入 if 分支；如果是在仿真的 0 时刻调用，既没有正在处理的数据，也没有新的 payload 到达，我们会进入 else 分支。
 
