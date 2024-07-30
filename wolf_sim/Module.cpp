@@ -149,7 +149,7 @@ void Module::simulationLoop() {
         regPtr->acquireRead();
         Time_t regActiveTime = regPtr->getActiveTime();
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
-                   regPtr->getName() + " 锁定成功");
+                   regPtr->getName() + " 锁定成功，最近激活时间 " + std::to_string(regActiveTime));
 #if OPT_OPTIMISTIC_READ
         inputRegLockedOptimistic[regId] = true;
         inputRegActiveTimeOptimistic[regId] = regActiveTime;
@@ -186,9 +186,12 @@ void Module::simulationLoop() {
         auto regPtr = inputRegPair.second;
         Time_t regActiveTime = regPtr->getActiveTime();
         std::any payload = regPtr->read();
+        MODULE_LOG("loop " + std::to_string(loopCount) + " 4.1.读取寄存器 " +
+                   regPtr->getName() + " 读取时间 " +
+                   std::to_string(regActiveTime) + " minTime " + std::to_string(minTime));
         if (regActiveTime == minTime) {
           MODULE_LOG("loop " + std::to_string(loopCount) +
-                     " 4.1.读取并弹出寄存器 " + regPtr->getName());
+                     " 4.2.读取并弹出寄存器 " + regPtr->getName() + " 读取时间 " + std::to_string(regActiveTime));
           if (payload.has_value()) {
             inputRegPayload[inputRegPair.first] = payload;
           }

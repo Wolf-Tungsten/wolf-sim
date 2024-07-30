@@ -48,6 +48,7 @@ namespace wolf_sim
         bool terminated;
         std::mutex mutex;
         std::condition_variable condWaitActive;
+        std::unique_lock<std::mutex> readLock;
     };
 
 }

@@ -28,7 +28,7 @@ namespace wolf_sim
         while(payloadQueue.empty() && !terminated){
             condWaitActive.wait(lock);
         }
-
+        readLock = std::move(lock);
     }
 
     Time_t Register::getActiveTime() {
@@ -56,7 +56,7 @@ namespace wolf_sim
     }
 
     void Register::releaseRead() {
-        mutex.unlock();
+        readLock.unlock();
     }
 
     void Register::write(Time_t _writeTime, std::any _payload) {
