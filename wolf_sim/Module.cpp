@@ -61,6 +61,12 @@ void Module::planWakeUp(Time_t delay, std::any wakeUpPayload) {
   wakeUpSchedule.push(std::make_pair(internalFireTime + delay, wakeUpPayload));
 }
 
+void Module::sleepFor(Time_t delay) {
+  planWakeUp(delay);
+  isSleeping = true;
+  sleepWakeUpTime = internalFireTime + delay;
+} 
+
 void Module::writeRegister(int id, std::any writePayload, Time_t delay) {
   if (delay < 0) {
     throw std::runtime_error("delay should not be negetive");
@@ -104,8 +110,6 @@ void Module::terminationNotify() {
   }
 }
 
-Time_t Module::whatTime() { return internalFireTime; }
-
 void Module::simulationLoop() {
   try {
     /** 在 wakeUpScheduler 中放一个 0 时刻的启动 */
@@ -116,7 +120,7 @@ void Module::simulationLoop() {
     // !registerWriteSchedule.empty()
     while (!hasTerminated) {
       /* 计算最小唤醒时间 */
-      Time_t minTime = MAX_TIME;
+      register Time_t minTime = MAX_TIME;
 #if OPT_OPTIMISTIC_READ
       inputRegLockedOptimistic.clear();
 #endif
@@ -147,7 +151,7 @@ void Module::simulationLoop() {
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" +
                    regPtr->getName());
         regPtr->acquireRead();
-        Time_t regActiveTime = regPtr->getActiveTime();
+        register Time_t regActiveTime = regPtr->getActiveTime();
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
                    regPtr->getName() + " 锁定成功，最近激活时间 " + std::to_string(regActiveTime));
 #if OPT_OPTIMISTIC_READ
@@ -162,7 +166,7 @@ void Module::simulationLoop() {
                  " 2.输入寄存器的 minTime= " +
                  (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
       if (!registerWriteSchedule.empty()) {
-        Time_t writeTime = std::get<0>(registerWriteSchedule.top());
+        register Time_t writeTime = std::get<0>(registerWriteSchedule.top());
         if (writeTime < minTime) {
           minTime = writeTime;
         }
@@ -237,10 +241,18 @@ void Module::simulationLoop() {
       internalFireTime = minTime;
       /* 如果有 payload 就 fire */
       if (!inputRegPayload.empty() || !wakeUpPayload.empty()) {
-        MODULE_LOG("loop " + std::to_string(loopCount) +
+        if(!isSleeping){
+          MODULE_LOG("loop " + std::to_string(loopCount) +
                    " 7.执行 fire， 本次启动时间 " +
                    std::to_string(internalFireTime));
-        fire();
+          fire();
+        } else if (minTime == sleepWakeUpTime) {
+          MODULE_LOG("loop " + std::to_string(loopCount) +
+                   " 7.执行 fire， 本次启动时间 " +
+                   std::to_string(internalFireTime));
+          fire();
+          isSleeping = false;
+        }
       }
       /* 将 fire 产生和之前计划的寄存器写动作写出 */
       for (const auto& outputRegPair : outputRegisterMap) {

@@ -2,6 +2,9 @@
 
 #include "wolf_sim/wolf_sim.h"
 
+const int TOTAL_PAYLOAD = 1000;
+const int PROCESS_DELAY = 0;
+
 class Producer : public wolf_sim::Module {
  public:
   /* 端口定义部分 */
@@ -10,28 +13,29 @@ class Producer : public wolf_sim::Module {
 
  private:
   /* 根据需要定义的状态 */
-  int payload = -1;
+  int payload = 0;
   /* 描述模块行为的 fire 函数 */
   void fire() {
-    std::cout << "Producer fired at " << whatTime() << std::endl;
-    bool isConsumerBusy;
-    if (busyIPort.valid()) {
-      // 重新发送当前 payload
+    if (whatTime() == 0) {
       payloadOPort << payload;
-      std::cout << "Producer resent payload " << payload << " at "
-                << whatTime() << std::endl;
-      planWakeUp(1);
     } else {
-      // 发送下一个 payload
-      payload++;
-      payloadOPort << payload;
-      std::cout << "Producer sent payload " << payload << " at " << whatTime()
-                << std::endl;
-      if(payload != 0 && whatTime() != (payload-1) * 11 + 1){
-        throw std::runtime_error("Producer sent payload at wrong time");
+      if (busyIPort.valid()) {
+        // t-1 时刻 consumer 处于 busy 状态，所以 t 时刻 Producer 还是发送 payload
+        payloadOPort << payload;
+      } else {
+        // t-1 时刻 consumer 出于 idle 状态，payload 发送成功
+        std::cout << "Producer sent " << payload << " at " << whatTime() - 1
+                  << std::endl;
+        // t 时刻发送下一个 payload
+        ++payload;
+        if(payload < TOTAL_PAYLOAD){
+          payloadOPort << payload;
+        } else {
+          terminateModuleSimulation();
+        }
       }
-      planWakeUp(1);
     }
+    planWakeUp(1);
   };
 };
 
@@ -42,34 +46,43 @@ class Consumer : public wolf_sim::Module {
   OPort(busyOPort, bool);
 
  private:
-  /* 根据仿真行为需要自定义的状态 */
   bool busy = false;
-  wolf_sim::Time_t doneTime = 0;
   int pendingPayload;
-  /* 描述模块行为的 fire 函数 */
+  wolf_sim::Time_t doneTime;
   void fire() {
-    std::cout << "Consumer fired at " << whatTime() << std::endl;
     if (busy) {
-      if (doneTime == whatTime()) {
-        busy = false;
-        std::cout << "Consumer processed done payload " << pendingPayload
-                  << " at " << whatTime() << std::endl;
-        if(pendingPayload == 10){
+      if (whatTime() == doneTime) {
+        // 模拟处理完成
+        std::cout << "Consumer processed " << pendingPayload << " at "
+                  << whatTime() << std::endl;
+        if (pendingPayload == TOTAL_PAYLOAD - 1) {
+          std::cout << "Consumer finished at " << whatTime() << std::endl;
           terminateSimulation();
         }
+        busy = false;
       } else {
-        std::cout << "Consumer sent busy at " << whatTime() << std::endl;
+        // 模拟处理中
         busyOPort << true;
         planWakeUp(1);
       }
-    } else if (payloadIPort >> pendingPayload) {
-      std::cout << "Consumer received payload " << pendingPayload << " and sent busy at "
-                << whatTime() << std::endl;
-      busy = true;
-      busyOPort << true;
-      doneTime = whatTime() + 10;
-      std::cout << "Consumer will done at " << doneTime << std::endl;
-      planWakeUp(1);
+    } else {
+      if (payloadIPort >> pendingPayload) {
+        if (PROCESS_DELAY == 0) {
+          // 模拟处理完成
+          std::cout << "Consumer processed " << pendingPayload << " at "
+                    << whatTime() << std::endl;
+          if (pendingPayload == TOTAL_PAYLOAD - 1) {
+            std::cout << "Consumer finished at " << whatTime() << std::endl;
+            terminateSimulation();
+          }
+        } else {
+          // 模拟处理中
+          busy = true;
+          doneTime = whatTime() + PROCESS_DELAY;
+          busyOPort << true;
+          planWakeUp(1);
+        }
+      }
     }
   }
 };

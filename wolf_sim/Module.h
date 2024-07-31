@@ -185,7 +185,7 @@ class Module : public std::enable_shared_from_this<Module> {
   std::map<int, std::shared_ptr<Register>> inputRegisterMap;
   std::map<int, std::shared_ptr<Register>> outputRegisterMap;
 
-  Time_t whatTime();
+  inline Time_t whatTime() { return internalFireTime; };
   std::map<int, std::any> inputRegPayload;
   std::vector<std::any> wakeUpPayload;
   virtual void fire() {};
@@ -209,6 +209,7 @@ class Module : public std::enable_shared_from_this<Module> {
   };
   std::shared_ptr<Register> createRegister(std::string name = "");
   void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
+  void sleepFor(Time_t delay);
   void writeRegister(int id, std::any writePayload, Time_t delay = 1);
   void terminateSimulation();
   void terminateModuleSimulation();
@@ -219,6 +220,8 @@ class Module : public std::enable_shared_from_this<Module> {
   }
   Time_t internalFireTime = 0;
   std::atomic<bool> hasTerminated = false;
+  bool isSleeping = false;
+  Time_t sleepWakeUpTime;
 #if OPT_OPTIMISTIC_READ
   std::map<int, Time_t> inputRegActiveTimeOptimistic;
   std::map<int, bool> inputRegLockedOptimistic;
