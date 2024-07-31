@@ -8,7 +8,7 @@ const int PROCESS_DELAY = 0;
 class Producer : public wolf_sim::Module {
  public:
   /* 端口定义部分 */
-  IPort(busyIPort, bool);
+  IPort(readyIPort, bool);
   OPort(payloadOPort, int);
 
  private:
@@ -19,7 +19,7 @@ class Producer : public wolf_sim::Module {
     if (whatTime() == 0) {
       payload = 0;
     } else {
-      if (!busyIPort.valid()) {
+      if (readyIPort.valid()) {
         // t-1 时刻 consumer 出于 idle 状态，payload 发送成功
         std::cout << "Producer sent " << payload << " at " << whatTime() - 1
                   << std::endl;
@@ -39,7 +39,7 @@ class Consumer : public wolf_sim::Module {
  public:
   /* 端口定义部分 */
   IPort(payloadIPort, int);
-  OPort(busyOPort, bool);
+  OPort(readyOPort, bool);
 
  private:
   bool busy = false;
@@ -74,7 +74,7 @@ class Consumer : public wolf_sim::Module {
         }
       }
     }
-    busyOPort << busy;
+    readyOPort << !busy;
     planWakeUp(1);
   }
 };
@@ -89,9 +89,9 @@ class Top : public wolf_sim::Module {
     producer->payloadOPort >>= payloadReg;
     consumer->payloadIPort <<= payloadReg;
 
-    auto busyReg = createRegister("busyReg");
-    consumer->busyOPort >>= busyReg;
-    producer->busyIPort <<= busyReg;
+    auto readyReg = createRegister("readyReg");
+    consumer->readyOPort >>= readyReg;
+    producer->readyIPort <<= readyReg;
   }
 };
 
