@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "wolf_sim/wolf_sim.h"
+#include "wolf_sim.h"
 
 const int TOTAL_PAYLOAD = 1000000;
 const int PROCESS_DELAY = 0;

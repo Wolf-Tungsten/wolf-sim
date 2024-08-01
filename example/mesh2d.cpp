@@ -1,47 +1,59 @@
+#include <atomic>
 #include <deque>
+#include <random>
 
-#include "wolf_sim/wolf_sim.h"
+#include "wolf_sim.h"
+
+const int MESH_SIZE = 16;       // 16*16 的网格
+const int BUFFER_SIZE = 10;     // 缓冲区大小
+const int PACKET_COUNT = 1000;  // 每个PE发送的包数量
+
+std::atomic<int> finalPacketCount = 0;
+
 struct packet {
-  int srcX;
-  int srcY;
   int dstX;
   int dstY;
+  int dataNo;
 };
 
 /* 左上角坐标为 0，0 */
 class Mesh2DRouter : public wolf_sim::Module {
  public:
   IPort(northInPort, packet);
-  OPort(northInAckPort, bool);
+  OPort(northInReadyPort, bool);
   IPort(southInPort, packet);
-  OPort(southInAckPort, bool);
+  OPort(southInReadyPort, bool);
   IPort(eastInPort, packet);
-  OPort(eastInAckPort, bool);
+  OPort(eastInReadyPort, bool);
   IPort(westInPort, packet);
-  OPort(westInAckPort, bool);
+  OPort(westInReadyPort, bool);
   IPort(localInPort, packet);
-  OPort(localInAckPort, bool);
+  OPort(localInReadyPort, bool);
 
   OPort(northOutPort, packet);
-  IPort(northOutAckPort, bool);
+  IPort(northOutReadyPort, bool);
   OPort(southOutPort, packet);
-  IPort(southOutAckPort, bool);
+  IPort(southOutReadyPort, bool);
   OPort(eastOutPort, packet);
-  IPort(eastOutAckPort, bool);
+  IPort(eastOutReadyPort, bool);
   OPort(westOutPort, packet);
-  IPort(westOutAckPort, bool);
+  IPort(westOutReadyPort, bool);
 
   OPort(localOutPort, packet);
-  IPort(localOutAckPort, bool);
+  IPort(localOutReadyPort, bool);
 
+ private:
   int xCoord;
   int yCoord;
   int meshXSize;
   int meshYSize;
+  bool hasNorth;
+  bool hasSouth;
+  bool hasEast;
+  bool hasWest;
 
   int bufferSize;
 
- private:
   std::deque<packet> northOutBuffer;
   std::deque<packet> southOutBuffer;
   std::deque<packet> eastOutBuffer;
@@ -51,142 +63,145 @@ class Mesh2DRouter : public wolf_sim::Module {
   int packetDropCnt = 0;
 
   void fire() {
-    bool northOccupied = false;
-    bool southOccupied = false;
-    bool eastOccupied = false;
-    bool westOccupied = false;
-    bool localOccupied = false;
+    packet p;
+    if (hasNorth && northInPort >> p) {
+      routeIntoBuffer(p);
+    }
+    if (hasSouth && southInPort >> p) {
+      routeIntoBuffer(p);
+    }
+    if (hasEast && eastInPort >> p) {
+      routeIntoBuffer(p);
+    }
+    if (hasWest && westInPort >> p) {
+      routeIntoBuffer(p);
+    }
+    if (localInPort >> p) {
+      routeIntoBuffer(p);
+    }
 
-    if (!northOutBuffer.empty()) {
-      northOccupied = true;
+    if (!northOutBuffer.empty() && northOutReadyPort.valid()) {
       northOutPort << northOutBuffer.front();
       northOutBuffer.pop_front();
     }
 
-    if (!southOutBuffer.empty()) {
-      southOccupied = true;
+    if (!southOutBuffer.empty() && southOutReadyPort.valid()) {
       southOutPort << southOutBuffer.front();
       southOutBuffer.pop_front();
     }
 
-    if (!eastOutBuffer.empty()) {
-      eastOccupied = true;
+    if (!eastOutBuffer.empty() && eastOutReadyPort.valid()) {
       eastOutPort << eastOutBuffer.front();
       eastOutBuffer.pop_front();
     }
 
-    if (!westOutBuffer.empty()) {
-      westOccupied = true;
+    if (!westOutBuffer.empty() && westOutReadyPort.valid()) {
       westOutPort << westOutBuffer.front();
       westOutBuffer.pop_front();
     }
 
-    if (!localOutBuffer.empty()) {
-      localOccupied = true;
+    if (!localOutBuffer.empty() && localOutReadyPort.valid()) {
       localOutPort << localOutBuffer.front();
       localOutBuffer.pop_front();
     }
 
-    packet payload;
-    if (xCoord > 0 && westInPort >> payload) {
-      // 西侧有接口
-      route(payload, northOccupied, southOccupied, eastOccupied, westOccupied,
-            localOccupied);
-    }
-    if (yCoord > 0 && northInPort >> payload) {
-      // 北侧有接口
-      route(payload, northOccupied, southOccupied, eastOccupied, westOccupied,
-            localOccupied);
-    }
-    if (xCoord < meshXSize - 1 && eastInPort >> payload) {
-      // 东侧有接口
-      route(payload, northOccupied, southOccupied, eastOccupied, westOccupied,
-            localOccupied);
-    }
-    if (yCoord < meshYSize - 1 && southInPort >> payload) {
-      // 南侧有接口
-      route(payload, northOccupied, southOccupied, eastOccupied, westOccupied,
-            localOccupied);
-    }
-    if (localInPort >> payload) {
-      // 本地一定有接口
-      route(payload, northOccupied, southOccupied, eastOccupied, westOccupied,
-            localOccupied);
-    }
-
-    if (!northOutBuffer.empty() || !southOutBuffer.empty() ||
-        !eastOutBuffer.empty() || !westOutBuffer.empty() ||
-        !localOutBuffer.empty()) {
-      // 如果缓冲区有数据，则下一拍要唤醒
-      planWakeUp(1);
-    }
+    bool northOutBufferFull = northOutBuffer.size() >= bufferSize;
+    bool southOutBufferFull = southOutBuffer.size() >= bufferSize;
+    bool eastOutBufferFull = eastOutBuffer.size() >= bufferSize;
+    bool westOutBufferFull = westOutBuffer.size() >= bufferSize;
+    bool localOutBufferFull = localOutBuffer.size() >= bufferSize;
+    bool routerReady =
+        !(northOutBufferFull || southOutBufferFull || eastOutBufferFull ||
+          westOutBufferFull || localOutBufferFull);
+    localInReadyPort << routerReady;
+    northInReadyPort << routerReady;
+    southInReadyPort << routerReady;
+    eastInReadyPort << routerReady;
+    westInReadyPort << routerReady;
+    planWakeUp(1);
   }
 
-  void route(const packet& p, bool& northOccupied, bool& southOccupied,
-             bool& eastOccupied, bool& westOccupied, bool& localOccupied) {
-    // 首先判断包的去向
-    // 如果包的去向已经被占用，那么检查对应缓冲区是否有空间
-    // 如果有空间则放入缓冲区，否则丢弃，计为丢包
-    // 如果包的去向未被占用，直接发送
-
+  void routeIntoBuffer(const packet& p) {
     if (p.dstX == xCoord && p.dstY == yCoord) {
-      if (localOccupied) {
-        if (localOutBuffer.size() < bufferSize) {
-          localOutBuffer.push_back(p);
-        } else {
-          packetDropCnt++;
-        }
-      } else {
-        localOccupied = true;
-        localOutPort << p;
-      }
+      localOutBuffer.push_back(p);
     } else if (p.dstX == xCoord && p.dstY < yCoord) {
-      if (northOccupied) {
-        if (northOutBuffer.size() < bufferSize) {
-          northOutBuffer.push_back(p);
-        } else {
-          packetDropCnt++;
-        }
-      } else {
-        northOccupied = true;
-        northOutPort << p;
-      }
+      northOutBuffer.push_back(p);
     } else if (p.dstX == xCoord && p.dstY > yCoord) {
-      if (southOccupied) {
-        if (southOutBuffer.size() < bufferSize) {
-          southOutBuffer.push_back(p);
-        } else {
-          packetDropCnt++;
-        }
-      } else {
-        southOccupied = true;
-        southOutPort << p;
-      }
+      southOutBuffer.push_back(p);
     } else if (p.dstX > xCoord) {
-      if (eastOccupied) {
-        if (eastOutBuffer.size() < bufferSize) {
-          eastOutBuffer.push_back(p);
-        } else {
-          packetDropCnt++;
-        }
-      } else {
-        eastOccupied = true;
-        eastOutPort << p;
-      }
+      eastOutBuffer.push_back(p);
     } else if (p.dstX < xCoord) {
-      if (westOccupied) {
-        if (westOutBuffer.size() < bufferSize) {
-          westOutBuffer.push_back(p);
-        } else {
-          packetDropCnt++;
-        }
-      } else {
-        westOccupied = true;
-        westOutPort << p;
-      }
+      westOutBuffer.push_back(p);
     } else {
       // 无法到达的包，丢弃
       throw std::runtime_error("Unreachable packet");
     }
+  }
+
+ public:
+  void setupRouter(int x, int y, int meshX, int meshY, int bufferSize) {
+    xCoord = x;
+    yCoord = y;
+    meshXSize = meshX;
+    meshYSize = meshY;
+    this->bufferSize = bufferSize;
+    // 左上角为 0，0
+    hasNorth = yCoord > 0;
+    hasSouth = yCoord < meshYSize - 1;
+    hasEast = xCoord < meshXSize - 1;
+    hasWest = xCoord > 0;
+  }
+};
+
+// EmuPE：模拟器向其他 PE 发送 packet 并接收 packet
+// 一共发送 PACKET_COUNT 个包
+// 每个包的 dstX 和 dstY 随机生成合法地址
+// 同时接收其他 PE 发送的包，当收到最后一个包的时候更新 finalPacketCount
+// 每个包的 dataNo 为包的序号，最后一个包 dataNo == PACKET_COUNT - 1
+// 当 finalPacketCount == PACKET_COUNT 时，结束模拟
+// finalPacketCount 是一个原子变量，可以在多线程中安全访问
+class EmuPE : public wolf_sim::Module {
+ public:
+  OPort(outPort, packet);
+  IPort(outReadyPort, bool);
+
+  IPort(inPort, packet);
+  OPort(inReadyPort, bool);
+
+  void setupPE() {
+    gen.seed(rd());
+    disX = std::uniform_int_distribution<int>(0, MESH_SIZE - 1);
+    disY = std::uniform_int_distribution<int>(0, MESH_SIZE - 1);
+    nextPacket.dataNo = 0;
+  }
+
+ private:
+  packet nextPacket;
+  std::random_device rd;
+  std::mt19937 gen;
+  std::uniform_int_distribution<int> disX;
+  std::uniform_int_distribution<int> disY;
+
+  void fire() {
+    packet inP;
+    if (inPort >> inP) {
+      if (inP.dataNo == PACKET_COUNT - 1) {
+        finalPacketCount++;
+        if (finalPacketCount == PACKET_COUNT * MESH_SIZE * MESH_SIZE) {
+          terminateSimulation();
+        }
+      }
+    }
+
+    outPort << nextPacket;
+
+    if (whatTime() == 0 || outReadyPort.valid()) {
+      ++nextPacket.dataNo;
+      nextPacket.dstX = disX(gen);
+      nextPacket.dstY = disY(gen);
+    }
+
+    inReadyPort << true;
+    planWakeUp(1);
   }
 };

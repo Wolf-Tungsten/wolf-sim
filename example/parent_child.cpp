@@ -1,4 +1,4 @@
-#include "wolf_sim/wolf_sim.h"
+#include "wolf_sim.h"
 
 class ChildProducer : public wolf_sim::Module {
     public:

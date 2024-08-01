@@ -1,9 +1,9 @@
 #include <iostream>
 
-#include "wolf_sim/wolf_sim.h"
+#include "wolf_sim.h"
 
-const int TOTAL_PAYLOAD = 1000000;
-const int PROCESS_DELAY = 0;
+const int TOTAL_PAYLOAD = 100000;
+const int PROCESS_DELAY = 10;
 
 class Producer : public wolf_sim::Module {
  public:

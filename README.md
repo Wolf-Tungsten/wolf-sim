@@ -1,6 +1,7 @@
 # Wolf-Sim：一个C++并行离散事件框架
 
 - [Wolf-Sim：一个C++并行离散事件框架](#wolf-sim一个c并行离散事件框架)
+  - [安装 Wolf-Sim](#安装-wolf-sim)
   - [快速认识三个基础组件](#快速认识三个基础组件)
     - [Module](#module)
     - [Register](#register)
@@ -33,7 +34,34 @@
   - [Module 的 `finalStop()` 方法](#module-的-finalstop-方法)
   - [一些可能存在的问题](#一些可能存在的问题)
 
+## 安装 Wolf-Sim
+
+添加为子模块 
+
+```
+git submodule add https://github.com/Wolf-Tungsten/wolf-sim wolf_sim
+git submodule update --init --recursive
+```
+
+在主项目的 CMakeList.txt 中添加
+
+```
+cmake_minimum_required(VERSION 3.10)
+project(MainProject)
+set(CMAKE_CXX_STANDARD 20)
+
+# 添加子模块目录
+add_subdirectory(wolf_sim)
+
+# 添加可执行文件
+add_executable(main_executable main.cpp)
+
+# 链接子模块库
+target_link_libraries(main_executable PRIVATE wolf_sim)
+```
+
 ## 快速认识三个基础组件
+
 
 ### Module
 
