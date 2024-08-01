@@ -1,4 +1,0 @@
-[submodule "ramulator"]
-	path = ramulator
-	url = git@github.com:CMU-SAFARI/ramulator.git
-
