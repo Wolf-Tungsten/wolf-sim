@@ -190,6 +190,20 @@ class Module : public std::enable_shared_from_this<Module> {
   std::vector<std::any> wakeUpPayload;
   virtual void fire() {};
   virtual void finalStop() {};
+  
+  template <typename T>
+  void connect(RegReadRef<T>& readRef, RegWriteRef<T>& writeRef, std::string name = "") {
+    auto regPtr = createRegister(name);
+    writeRef >>= regPtr;
+    readRef <<= regPtr;
+  };
+
+  template <typename T>
+  void connect(RegWriteRef<T>& writeRef, RegReadRef<T>& readRef, std::string name = "") {
+    auto regPtr = createRegister(name);
+    writeRef >>= regPtr;
+    readRef <<= regPtr;
+  };
 
   template <typename ModuleDerivedType>
   std::shared_ptr<ModuleDerivedType> createChildModule(std::string name = "") {
@@ -215,8 +229,13 @@ class Module : public std::enable_shared_from_this<Module> {
   void terminateModuleSimulation();
 
  private:
+  std::deque<std::string> moduleLogBuffer;
   void moduleLog(std::string msg) {
-    std::cout << "[" << name << "] " << msg << std::endl;
+    //std::cout << "[" << name << "] " << msg << std::endl;
+    moduleLogBuffer.push_back("[" + name + "] " + msg);
+    if(moduleLogBuffer.size() > 100) {
+      moduleLogBuffer.pop_front();
+    }
   }
   Time_t internalFireTime = 0;
   std::atomic<bool> hasTerminated = false;

@@ -4,13 +4,15 @@
 
 #include "wolf_sim.h"
 
-const int MESH_SIZE = 16;       // 16*16 的网格
+const int MESH_SIZE = 2;        // 16*16 的网格
 const int BUFFER_SIZE = 10;     // 缓冲区大小
-const int PACKET_COUNT = 1000;  // 每个PE发送的包数量
+const int PACKET_COUNT = 100;  // 每个PE发送的包数量
 
 std::atomic<int> finalPacketCount = 0;
 
 struct packet {
+  int srcX;
+  int srcY;
   int dstX;
   int dstY;
   int dataNo;
@@ -42,15 +44,16 @@ class Mesh2DRouter : public wolf_sim::Module {
   OPort(localOutPort, packet);
   IPort(localOutReadyPort, bool);
 
+  bool hasNorth;
+  bool hasSouth;
+  bool hasEast;
+  bool hasWest;
+
  private:
   int xCoord;
   int yCoord;
   int meshXSize;
   int meshYSize;
-  bool hasNorth;
-  bool hasSouth;
-  bool hasEast;
-  bool hasWest;
 
   int bufferSize;
 
@@ -60,68 +63,106 @@ class Mesh2DRouter : public wolf_sim::Module {
   std::deque<packet> westOutBuffer;
   std::deque<packet> localOutBuffer;
 
+  bool northOutSent = false;
+  bool southOutSent = false;
+  bool eastOutSent = false;
+  bool westOutSent = false;
+  bool localOutSent = false;
+
   int packetDropCnt = 0;
+
+  bool bufferFull = false;
 
   void fire() {
     packet p;
-    if (hasNorth && northInPort >> p) {
+    if (!bufferFull && hasNorth && (northInPort >> p)) {
       routeIntoBuffer(p);
     }
-    if (hasSouth && southInPort >> p) {
+    if (!bufferFull && hasSouth && (southInPort >> p)) {
       routeIntoBuffer(p);
     }
-    if (hasEast && eastInPort >> p) {
+    if (!bufferFull && hasEast && (eastInPort >> p)) {
       routeIntoBuffer(p);
     }
-    if (hasWest && westInPort >> p) {
+    if (!bufferFull && hasWest && (westInPort >> p)) {
       routeIntoBuffer(p);
     }
-    if (localInPort >> p) {
+    if (!bufferFull && localInPort >> p) {
       routeIntoBuffer(p);
     }
 
-    if (!northOutBuffer.empty() && northOutReadyPort.valid()) {
-      northOutPort << northOutBuffer.front();
+    if (northOutSent && northOutReadyPort.valid()) {
       northOutBuffer.pop_front();
+      northOutSent = false;
     }
-
-    if (!southOutBuffer.empty() && southOutReadyPort.valid()) {
-      southOutPort << southOutBuffer.front();
+    if (southOutSent && southOutReadyPort.valid()) {
       southOutBuffer.pop_front();
+      southOutSent = false;
     }
-
-    if (!eastOutBuffer.empty() && eastOutReadyPort.valid()) {
-      eastOutPort << eastOutBuffer.front();
+    if (eastOutSent && eastOutReadyPort.valid()) {
       eastOutBuffer.pop_front();
+      eastOutSent = false;
     }
-
-    if (!westOutBuffer.empty() && westOutReadyPort.valid()) {
-      westOutPort << westOutBuffer.front();
+    if (westOutSent && westOutReadyPort.valid()) {
       westOutBuffer.pop_front();
+      westOutSent = false;
     }
-
-    if (!localOutBuffer.empty() && localOutReadyPort.valid()) {
-      localOutPort << localOutBuffer.front();
+    if (localOutSent && localOutReadyPort.valid()) {
       localOutBuffer.pop_front();
+      localOutSent = false;
     }
 
-    bool northOutBufferFull = northOutBuffer.size() >= bufferSize;
-    bool southOutBufferFull = southOutBuffer.size() >= bufferSize;
-    bool eastOutBufferFull = eastOutBuffer.size() >= bufferSize;
-    bool westOutBufferFull = westOutBuffer.size() >= bufferSize;
-    bool localOutBufferFull = localOutBuffer.size() >= bufferSize;
-    bool routerReady =
-        !(northOutBufferFull || southOutBufferFull || eastOutBufferFull ||
-          westOutBufferFull || localOutBufferFull);
+    if (!northOutBuffer.empty()) {
+      northOutPort << northOutBuffer.front();
+      northOutSent = true;
+    }
+    if (!southOutBuffer.empty()) {
+      southOutPort << southOutBuffer.front();
+      southOutSent = true;
+    }
+    if (!eastOutBuffer.empty()) {
+      eastOutPort << eastOutBuffer.front();
+      eastOutSent = true;
+    }
+    if (!westOutBuffer.empty()) {
+      westOutPort << westOutBuffer.front();
+      westOutSent = true;
+    }
+    if (!localOutBuffer.empty()) {
+      localOutPort << localOutBuffer.front();
+      localOutSent = true;
+    }
+
+    bool northOutBufferFull = (northOutBuffer.size() >= bufferSize);
+    bool southOutBufferFull = (southOutBuffer.size() >= bufferSize);
+    bool eastOutBufferFull = (eastOutBuffer.size() >= bufferSize);
+    bool westOutBufferFull = (westOutBuffer.size() >= bufferSize);
+    bool localOutBufferFull = (localOutBuffer.size() >= bufferSize);
+    bufferFull = northOutBufferFull || southOutBufferFull ||
+                 eastOutBufferFull || westOutBufferFull || localOutBufferFull;
+    bool routerReady = !bufferFull;
     localInReadyPort << routerReady;
-    northInReadyPort << routerReady;
-    southInReadyPort << routerReady;
-    eastInReadyPort << routerReady;
-    westInReadyPort << routerReady;
+    if (hasNorth) {
+      northInReadyPort << routerReady;
+    }
+    if (hasSouth) {
+      southInReadyPort << routerReady;
+    }
+    if (hasEast) {
+      eastInReadyPort << routerReady;
+    }
+    if (hasWest) {
+      westInReadyPort << routerReady;
+    }
     planWakeUp(1);
   }
 
   void routeIntoBuffer(const packet& p) {
+    if (p.dataNo == PACKET_COUNT - 1) {
+      std::cout << "Router " << xCoord << "_" << yCoord << " received packet "
+                << p.dataNo << " from " << p.srcX << "_" << p.srcY << " to "
+                << p.dstX << "_" << p.dstY << " at " << whatTime() << std::endl;
+    }
     if (p.dstX == xCoord && p.dstY == yCoord) {
       localOutBuffer.push_back(p);
     } else if (p.dstX == xCoord && p.dstY < yCoord) {
@@ -168,7 +209,11 @@ class EmuPE : public wolf_sim::Module {
   IPort(inPort, packet);
   OPort(inReadyPort, bool);
 
-  void setupPE() {
+  void setupPE(int x, int y) {
+    xCoord = x;
+    yCoord = y;
+    nextPacket.srcX = xCoord;
+    nextPacket.srcY = yCoord;
     gen.seed(rd());
     disX = std::uniform_int_distribution<int>(0, MESH_SIZE - 1);
     disY = std::uniform_int_distribution<int>(0, MESH_SIZE - 1);
@@ -181,27 +226,138 @@ class EmuPE : public wolf_sim::Module {
   std::mt19937 gen;
   std::uniform_int_distribution<int> disX;
   std::uniform_int_distribution<int> disY;
+  int xCoord;
+  int yCoord;
 
   void fire() {
     packet inP;
     if (inPort >> inP) {
       if (inP.dataNo == PACKET_COUNT - 1) {
         finalPacketCount++;
-        if (finalPacketCount == PACKET_COUNT * MESH_SIZE * MESH_SIZE) {
+        if (finalPacketCount == MESH_SIZE * MESH_SIZE) {
+          std::cout << "ahhahahahahahhahah" << std::endl;
           terminateSimulation();
         }
       }
     }
 
-    outPort << nextPacket;
+    
 
-    if (whatTime() == 0 || outReadyPort.valid()) {
+    if (outReadyPort.valid()) {
+      if (nextPacket.dataNo == PACKET_COUNT - 1) {
+        std::cout << "PE " << xCoord << "_" << yCoord << " send packet "
+                  << nextPacket.dataNo << " to " << nextPacket.dstX << "_"
+                  << nextPacket.dstY << " at " << whatTime() << std::endl;
+      }
       ++nextPacket.dataNo;
       nextPacket.dstX = disX(gen);
       nextPacket.dstY = disY(gen);
     }
 
+    outPort << nextPacket;
     inReadyPort << true;
     planWakeUp(1);
   }
 };
+
+class Mesh2DTop : public wolf_sim::Module {
+  void construct() {
+    std::vector<std::shared_ptr<Mesh2DRouter>> routerVec;
+    // 创建 Router 和 PE，并建立 Router 和 PE 的连接
+    for (int x = 0; x < MESH_SIZE; ++x) {
+      for (int y = 0; y < MESH_SIZE; ++y) {
+        auto router = createChildModule<Mesh2DRouter>(
+            "router" + std::to_string(x) + "_" + std::to_string(y));
+        router->setupRouter(x, y, MESH_SIZE, MESH_SIZE, BUFFER_SIZE);
+        routerVec.push_back(router);
+
+        auto pe = createChildModule<EmuPE>("pe" + std::to_string(x) + "_" +
+                                           std::to_string(y));
+        pe->setupPE(x, y);
+
+        connect(pe->outPort, router->localInPort, "PE" + std::to_string(x) +
+                                  "_" + std::to_string(y) + "_to_Router" +
+                                  std::to_string(x) + "_" + std::to_string(y));
+        connect(pe->outReadyPort, router->localInReadyPort, "PE" +
+                                      std::to_string(x) + "_" + std::to_string(y) +
+                                      "_to_Router" + std::to_string(x) + "_" +
+                                      std::to_string(y) + "_ready");
+        connect(router->localOutPort, pe->inPort, "Router" + std::to_string(x) +
+                                           "_" + std::to_string(y) + "_to_PE" +
+                                           std::to_string(x) + "_" +
+                                           std::to_string(y));
+        connect(router->localOutReadyPort, pe->inReadyPort, "Router" +
+                                               std::to_string(x) + "_" +
+                                               std::to_string(y) + "_to_PE" +
+                                               std::to_string(x) + "_" +
+                                               std::to_string(y) + "_ready");
+      }
+    }
+    // 建立 Router 之间的连接
+    for (int x = 0; x < MESH_SIZE; ++x) {
+      for (int y = 0; y < MESH_SIZE; ++y) {
+        auto router = routerVec[x * MESH_SIZE + y];
+        if (router->hasNorth) {
+          // 创建北向连接
+          auto northRouter = routerVec[x * MESH_SIZE + y - 1];
+          connect(router->northOutPort, northRouter->southInPort, "Router" +
+                                              std::to_string(x) + "_" +
+                                              std::to_string(y) + "_to_Router" +
+                                              std::to_string(x) + "_" +
+                                              std::to_string(y - 1));
+          connect(router->northOutReadyPort, northRouter->southInReadyPort, "Router" +
+                                                  std::to_string(x) + "_" +
+                                                  std::to_string(y) + "_to_Router" +
+                                                  std::to_string(x) + "_" +
+                                                  std::to_string(y - 1) + "_ready");
+        }
+        if (router->hasSouth) {
+          // 创建南向连接
+          auto southRouter = routerVec[x * MESH_SIZE + y + 1];
+          connect(router->southOutPort, southRouter->northInPort, "Router" +
+                                              std::to_string(x) + "_" +
+                                              std::to_string(y) + "_to_Router" +
+                                              std::to_string(x) + "_" +
+                                              std::to_string(y + 1));
+          connect(router->southOutReadyPort, southRouter->northInReadyPort, "Router" +
+                                                  std::to_string(x) + "_" +
+                                                  std::to_string(y) + "_to_Router" +
+                                                  std::to_string(x) + "_" +
+                                                  std::to_string(y + 1) + "_ready");
+        }
+        if (router->hasWest) {
+          // 创建西向连接
+          auto westRouter = routerVec[(x - 1) * MESH_SIZE + y];
+          connect(router->westOutPort, westRouter->eastInPort, "Router" +
+                                          std::to_string(x) + "_" + std::to_string(y) +
+                                          "_to_Router" + std::to_string(x - 1) + "_" +
+                                          std::to_string(y));
+          connect(router->westOutReadyPort, westRouter->eastInReadyPort, "Router" +
+                                              std::to_string(x) + "_" + std::to_string(y) +
+                                              "_to_Router" + std::to_string(x - 1) + "_" +
+                                              std::to_string(y) + "_ready");
+        }
+        if (router->hasEast) {
+          // 创建东向连接
+          auto eastRouter = routerVec[(x + 1) * MESH_SIZE + y];
+          connect(router->eastOutPort, eastRouter->westInPort, "Router" +
+                                          std::to_string(x) + "_" + std::to_string(y) +
+                                          "_to_Router" + std::to_string(x + 1) + "_" +
+                                          std::to_string(y));
+          connect(router->eastOutReadyPort, eastRouter->westInReadyPort, "Router" +
+                                              std::to_string(x) + "_" + std::to_string(y) +
+                                              "_to_Router" + std::to_string(x + 1) + "_" +
+                                              std::to_string(y) + "_ready");
+        }
+      }
+    }
+  }
+};
+
+int main() {
+  auto env = std::make_shared<wolf_sim::Environment>();
+  auto top = std::make_shared<Mesh2DTop>();
+  env->addTopModule(top);
+  env->run();
+  return 0;
+}

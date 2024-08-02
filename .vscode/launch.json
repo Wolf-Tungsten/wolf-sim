@@ -34,10 +34,10 @@
             ]
         },
         {
-            "name": "(gdb) parent_child",
+            "name": "(gdb) mesh2D",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/example/parent_child",
+            "program": "${workspaceFolder}/build/example/mesh2d",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",

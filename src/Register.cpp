@@ -62,6 +62,10 @@ namespace wolf_sim
     void Register::write(Time_t _writeTime, std::any _payload) {
         std::unique_lock<std::mutex> lock(mutex);
 
+        if(terminated){
+            return;
+        }
+
         if(_writeTime <= lastWriteTime) {
             if(_payload.has_value()){
                 // 当输入 payload 包含有效值的情况下，则不允许发生这种情况

@@ -120,7 +120,7 @@ void Module::simulationLoop() {
     // !registerWriteSchedule.empty()
     while (!hasTerminated) {
       /* 计算最小唤醒时间 */
-      register Time_t minTime = MAX_TIME;
+      Time_t minTime = MAX_TIME;
 #if OPT_OPTIMISTIC_READ
       inputRegLockedOptimistic.clear();
 #endif
@@ -151,7 +151,7 @@ void Module::simulationLoop() {
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.1.申请锁定寄存器" +
                    regPtr->getName());
         regPtr->acquireRead();
-        register Time_t regActiveTime = regPtr->getActiveTime();
+        Time_t regActiveTime = regPtr->getActiveTime();
         MODULE_LOG("loop " + std::to_string(loopCount) + " 1.2.寄存器 " +
                    regPtr->getName() + " 锁定成功，最近激活时间 " + std::to_string(regActiveTime));
 #if OPT_OPTIMISTIC_READ
@@ -166,7 +166,7 @@ void Module::simulationLoop() {
                  " 2.输入寄存器的 minTime= " +
                  (minTime == MAX_TIME ? "MAX_TIME" : std::to_string(minTime)));
       if (!registerWriteSchedule.empty()) {
-        register Time_t writeTime = std::get<0>(registerWriteSchedule.top());
+        Time_t writeTime = std::get<0>(registerWriteSchedule.top());
         if (writeTime < minTime) {
           minTime = writeTime;
         }
