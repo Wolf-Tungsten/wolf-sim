@@ -63,17 +63,28 @@ class Mesh2DRouter : public wolf_sim::Module {
   std::deque<packet> westOutBuffer;
   std::deque<packet> localOutBuffer;
 
-  bool northOutSent = false;
-  bool southOutSent = false;
-  bool eastOutSent = false;
-  bool westOutSent = false;
-  bool localOutSent = false;
-
-  int packetDropCnt = 0;
-
   bool bufferFull = false;
 
   void fire() {
+
+    // 清空已经发送的包
+    if (!northOutBuffer.empty() && northOutReadyPort.valid()) {
+      northOutBuffer.pop_front();
+    }
+    if (!southOutBuffer.empty() && southOutReadyPort.valid()) {
+      southOutBuffer.pop_front();
+    }
+    if (!eastOutBuffer.empty() && eastOutReadyPort.valid()) {
+      eastOutBuffer.pop_front();
+    }
+    if (!westOutBuffer.empty() && westOutReadyPort.valid()) {
+      westOutBuffer.pop_front();
+    }
+    if (!localOutBuffer.empty() && localOutReadyPort.valid()) {
+      localOutBuffer.pop_front();
+    }
+
+    // 转载新的包，但注意判断条件不能被清空过程修改
     packet p;
     if (!bufferFull && hasNorth && (northInPort >> p)) {
       routeIntoBuffer(p);
@@ -91,48 +102,24 @@ class Mesh2DRouter : public wolf_sim::Module {
       routeIntoBuffer(p);
     }
 
-    if (northOutSent && northOutReadyPort.valid()) {
-      northOutBuffer.pop_front();
-      northOutSent = false;
-    }
-    if (southOutSent && southOutReadyPort.valid()) {
-      southOutBuffer.pop_front();
-      southOutSent = false;
-    }
-    if (eastOutSent && eastOutReadyPort.valid()) {
-      eastOutBuffer.pop_front();
-      eastOutSent = false;
-    }
-    if (westOutSent && westOutReadyPort.valid()) {
-      westOutBuffer.pop_front();
-      westOutSent = false;
-    }
-    if (localOutSent && localOutReadyPort.valid()) {
-      localOutBuffer.pop_front();
-      localOutSent = false;
-    }
-
+    // 输出下一个包
     if (!northOutBuffer.empty()) {
       northOutPort << northOutBuffer.front();
-      northOutSent = true;
     }
     if (!southOutBuffer.empty()) {
       southOutPort << southOutBuffer.front();
-      southOutSent = true;
     }
     if (!eastOutBuffer.empty()) {
       eastOutPort << eastOutBuffer.front();
-      eastOutSent = true;
     }
     if (!westOutBuffer.empty()) {
       westOutPort << westOutBuffer.front();
-      westOutSent = true;
     }
     if (!localOutBuffer.empty()) {
       localOutPort << localOutBuffer.front();
-      localOutSent = true;
     }
 
+    // 判断空满状态
     bool northOutBufferFull = (northOutBuffer.size() >= bufferSize);
     bool southOutBufferFull = (southOutBuffer.size() >= bufferSize);
     bool eastOutBufferFull = (eastOutBuffer.size() >= bufferSize);
