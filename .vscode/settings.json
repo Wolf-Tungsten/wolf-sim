@@ -76,7 +76,15 @@
         "codecvt": "cpp",
         "source_location": "cpp",
         "numbers": "cpp",
-        "semaphore": "cpp"
+        "semaphore": "cpp",
+        "__hash_table": "cpp",
+        "__split_buffer": "cpp",
+        "__tree": "cpp",
+        "ios": "cpp",
+        "__bit_reference": "cpp",
+        "__node_handle": "cpp",
+        "__memory": "cpp",
+        "locale": "cpp"
     },
     "C_Cpp.default.cppStandard": "gnu++20",
     "C_Cpp.clang_format_fallbackStyle": "Microsoft",
