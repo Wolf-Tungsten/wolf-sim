@@ -2,7 +2,7 @@
 // Created by gaoruihao on 6/23/23.
 //
 
-#include "Environment.h"
+#include "wolf_sim.h"
 
 namespace wolf_sim {
 

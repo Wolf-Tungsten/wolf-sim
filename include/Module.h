@@ -52,6 +52,123 @@
 namespace wolf_sim {
 
 template <typename T>
+class RegReadRef;
+
+template <typename T>
+class RegWriteRef;
+
+class Module : public std::enable_shared_from_this<Module> {
+ public:
+  virtual void construct() {};
+  void setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr);
+  friend class Environment;
+  template <typename T>
+  friend class RegReadRef;
+  template <typename T>
+  friend class RegWriteRef;
+  class SimulationTerminateException : public std::exception {};
+  void terminationNotify();
+
+
+ protected:
+  std::string name;
+  std::weak_ptr<Module> parentPtr;
+  std::map<int, std::shared_ptr<Register>> inputRegisterMap;
+  std::map<int, std::shared_ptr<Register>> outputRegisterMap;
+
+  inline Time_t whatTime() { return internalFireTime; };
+  std::map<int, std::any> inputRegPayload;
+  std::vector<std::any> wakeUpPayload;
+  virtual void fire() {};
+  virtual void finalStop() {};
+  
+  template <typename T>
+  void connect(RegReadRef<T>& readRef, RegWriteRef<T>& writeRef, std::string name = "") {
+    auto regPtr = createRegister(name);
+    writeRef >>= regPtr;
+    readRef <<= regPtr;
+  };
+
+  template <typename T>
+  void connect(RegWriteRef<T>& writeRef, RegReadRef<T>& readRef, std::string name = "") {
+    auto regPtr = createRegister(name);
+    writeRef >>= regPtr;
+    readRef <<= regPtr;
+  };
+
+  template <typename ModuleDerivedType>
+  std::shared_ptr<ModuleDerivedType> createChildModule(std::string name = "") {
+    static_assert(std::is_base_of<Module, ModuleDerivedType>::value,
+                  "child module must be derived from Module class");
+    if (name == "") {
+      name = std::string("anonymous_block_") +
+             std::to_string(childModuleMap.size());
+    }
+    if (childModuleMap.contains(name)) {
+      throw std::runtime_error("child module name conflict!");
+    }
+    auto p = std::make_shared<ModuleDerivedType>();
+    childModuleMap[name] = p;
+    p->setNameAndParent(name, shared_from_this());
+    return p;
+  };
+  std::shared_ptr<Register> createRegister(std::string name = "");
+  void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
+  void sleepFor(Time_t delay);
+  void writeRegister(int id, std::any writePayload, Time_t delay = 1);
+  void terminateSimulation();
+  void terminateModuleSimulation();
+
+ private:
+  std::deque<std::string> moduleLogBuffer;
+  void moduleLog(std::string msg) {
+    //std::cout << "[" << name << "] " << msg << std::endl;
+    moduleLogBuffer.push_back("[" + name + "] " + msg);
+    if(moduleLogBuffer.size() > 100) {
+      moduleLogBuffer.pop_front();
+    }
+  }
+  Time_t internalFireTime = 0;
+  std::atomic<bool> hasTerminated = false;
+  bool isSleeping = false;
+  Time_t sleepWakeUpTime;
+#if OPT_OPTIMISTIC_READ
+  std::map<int, Time_t> inputRegActiveTimeOptimistic;
+  std::map<int, bool> inputRegLockedOptimistic;
+#endif
+  std::map<std::string, std::shared_ptr<Register>> childRegisterMap;
+  std::map<std::string, std::shared_ptr<Module>> childModuleMap;
+  std::map<int, std::any> pendingRegisterWrite;
+  struct EarliestWakeUpComparator {
+    bool operator()(const std::pair<Time_t, std::any>& p1,
+                    const std::pair<Time_t, std::any>& p2) {
+      return p1.first > p2.first;
+    }
+  };
+  std::priority_queue<std::pair<Time_t, std::any>,
+                      std::vector<std::pair<Time_t, std::any>>,
+                      EarliestWakeUpComparator>
+      wakeUpSchedule;
+  struct EarliestRegisterWriteComparator {
+    bool operator()(const std::tuple<Time_t, int, std::any>& p1,
+                    const std::tuple<Time_t, int, std::any>& p2) {
+      return std::get<0>(p1) > std::get<0>(p2);
+    }
+  };
+  std::priority_queue<std::tuple<Time_t, int, std::any>,
+                      std::vector<std::tuple<Time_t, int, std::any>>,
+                      EarliestRegisterWriteComparator>
+      registerWriteSchedule;
+  int nextInputId = 0;
+  int nextOutputId = 0;
+  int assignInput(std::shared_ptr<Register> regPtr);
+  int assignOutput(std::shared_ptr<Register> regPtr);
+  std::shared_ptr<Register> ejectInput(int id);
+  std::shared_ptr<Register> ejectOutput(int id);
+  void simulationLoop();
+};
+
+template <typename T>
 class RegReadRef {
  public:
   RegReadRef(Module* _mPtr) : mPtr(_mPtr), id(-1) {};
@@ -164,117 +281,6 @@ class RegWriteRef {
  private:
   Module* mPtr;
   int id;
-};
-
-class Module : public std::enable_shared_from_this<Module> {
- public:
-  virtual void construct() {};
-  void setNameAndParent(std::string _name, std::weak_ptr<Module> _parentPtr);
-  friend class Environment;
-  template <typename T>
-  friend class RegReadRef;
-  template <typename T>
-  friend class RegWriteRef;
-  class SimulationTerminateException : public std::exception {};
-  void terminationNotify();
-
-
- protected:
-  std::string name;
-  std::weak_ptr<Module> parentPtr;
-  std::map<int, std::shared_ptr<Register>> inputRegisterMap;
-  std::map<int, std::shared_ptr<Register>> outputRegisterMap;
-
-  inline Time_t whatTime() { return internalFireTime; };
-  std::map<int, std::any> inputRegPayload;
-  std::vector<std::any> wakeUpPayload;
-  virtual void fire() {};
-  virtual void finalStop() {};
-  
-  template <typename T>
-  void connect(RegReadRef<T>& readRef, RegWriteRef<T>& writeRef, std::string name = "") {
-    auto regPtr = createRegister(name);
-    writeRef >>= regPtr;
-    readRef <<= regPtr;
-  };
-
-  template <typename T>
-  void connect(RegWriteRef<T>& writeRef, RegReadRef<T>& readRef, std::string name = "") {
-    auto regPtr = createRegister(name);
-    writeRef >>= regPtr;
-    readRef <<= regPtr;
-  };
-
-  template <typename ModuleDerivedType>
-  std::shared_ptr<ModuleDerivedType> createChildModule(std::string name = "") {
-    static_assert(std::is_base_of<Module, ModuleDerivedType>::value,
-                  "child module must be derived from Module class");
-    if (name == "") {
-      name = std::string("anonymous_block_") +
-             std::to_string(childModuleMap.size());
-    }
-    if (childModuleMap.contains(name)) {
-      throw std::runtime_error("child module name conflict!");
-    }
-    auto p = std::make_shared<ModuleDerivedType>();
-    childModuleMap[name] = p;
-    p->setNameAndParent(name, shared_from_this());
-    return p;
-  };
-  std::shared_ptr<Register> createRegister(std::string name = "");
-  void planWakeUp(Time_t delay, std::any wakeUpPayload = std::any());
-  void sleepFor(Time_t delay);
-  void writeRegister(int id, std::any writePayload, Time_t delay = 1);
-  void terminateSimulation();
-  void terminateModuleSimulation();
-
- private:
-  std::deque<std::string> moduleLogBuffer;
-  void moduleLog(std::string msg) {
-    //std::cout << "[" << name << "] " << msg << std::endl;
-    moduleLogBuffer.push_back("[" + name + "] " + msg);
-    if(moduleLogBuffer.size() > 100) {
-      moduleLogBuffer.pop_front();
-    }
-  }
-  Time_t internalFireTime = 0;
-  std::atomic<bool> hasTerminated = false;
-  bool isSleeping = false;
-  Time_t sleepWakeUpTime;
-#if OPT_OPTIMISTIC_READ
-  std::map<int, Time_t> inputRegActiveTimeOptimistic;
-  std::map<int, bool> inputRegLockedOptimistic;
-#endif
-  std::map<std::string, std::shared_ptr<Register>> childRegisterMap;
-  std::map<std::string, std::shared_ptr<Module>> childModuleMap;
-  std::map<int, std::any> pendingRegisterWrite;
-  struct EarliestWakeUpComparator {
-    bool operator()(const std::pair<Time_t, std::any>& p1,
-                    const std::pair<Time_t, std::any>& p2) {
-      return p1.first > p2.first;
-    }
-  };
-  std::priority_queue<std::pair<Time_t, std::any>,
-                      std::vector<std::pair<Time_t, std::any>>,
-                      EarliestWakeUpComparator>
-      wakeUpSchedule;
-  struct EarliestRegisterWriteComparator {
-    bool operator()(const std::tuple<Time_t, int, std::any>& p1,
-                    const std::tuple<Time_t, int, std::any>& p2) {
-      return std::get<0>(p1) > std::get<0>(p2);
-    }
-  };
-  std::priority_queue<std::tuple<Time_t, int, std::any>,
-                      std::vector<std::tuple<Time_t, int, std::any>>,
-                      EarliestRegisterWriteComparator>
-      registerWriteSchedule;
-  int nextInputId = 0;
-  int nextOutputId = 0;
-  int assignInput(std::shared_ptr<Register> regPtr);
-  int assignOutput(std::shared_ptr<Register> regPtr);
-  std::shared_ptr<Register> ejectInput(int id);
-  std::shared_ptr<Register> ejectOutput(int id);
-  void simulationLoop();
 };
 
 }  // namespace wolf_sim
