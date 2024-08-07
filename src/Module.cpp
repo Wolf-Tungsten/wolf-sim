@@ -5,7 +5,7 @@ namespace wolf_sim {
 void Module::reset() { mcPtr = nullptr; }
 
 void Module::configRoutine(std::shared_ptr<ModuleContext> mcPtr) {
-  tickScheduler.setup(shared_from_this());
+  childTickScheduler.setup(shared_from_this());
   this->mcPtr = mcPtr;
   /* 调用当前模块的 config 方法 */
   config();
@@ -40,7 +40,7 @@ void Module::tickRoutine(Time_t currentTime) {
   updateChildInput();
   /* 递归调用子模块的 tickRoutine */
   moduleStatus = ModuleStatus::tickChildren;
-  tickScheduler.scheduledTick(currentTime);
+  childTickScheduler.scheduledTick(currentTime);
   /* 更新当前模块状态输出 */
   moduleStatus = ModuleStatus::updateStateOutput;
   updateStateOutput();

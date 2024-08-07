@@ -19,7 +19,7 @@ class ChildTickScheduler {
         void scheduledTick(Time_t currentTime);
     private:
         const static int MAX_THREAD_COUNT = 4;
-        const static int MAX_BENCHMARK_COUNT = 1000;
+        const static int MAX_BENCHMARK_COUNT = 50;
         int benchmarkCount = 0;
         double serialOverhead = 0;
         double parallelOverhead = 0;

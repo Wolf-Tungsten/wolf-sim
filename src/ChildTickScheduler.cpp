@@ -88,6 +88,12 @@ void ChildTickScheduler::parallelTick(Time_t currentTime) {
     auto child = p.second;
     threads.push_back(std::thread(
         [child, currentTime]() { child->tickRoutine(currentTime); }));
+    if (threads.size() >= MAX_THREAD_COUNT) {
+      for (auto& t : threads) {
+        t.join();
+      }
+      threads.clear();
+    }
   }
   for (auto& t : threads) {
     t.join();
