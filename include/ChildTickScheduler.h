@@ -6,27 +6,29 @@
 #include <memory>
 #include <vector>
 
+#include "SimTime.h"
 #include "Module.h"
 
 namespace wolf_sim {
+class Module;
 class ChildTickScheduler {
     public:
-        void setup(std::weak_ptr<Module> module);
+        void setup(Module* module);
         void reset();
         void forceSerial();
         void forceParallel();
         bool determined();
-        void scheduledTick(Time_t currentTime);
+        void scheduledTick(SimTime_t currentTime);
     private:
         const static int MAX_THREAD_COUNT = 4;
-        const static int MAX_BENCHMARK_COUNT = 50;
+        const static int MAX_BENCHMARK_COUNT = 500;
         int benchmarkCount = 0;
         double serialOverhead = 0;
         double parallelOverhead = 0;
-        std::weak_ptr<Module> module;
+        Module* module;
         enum Mode {pending, benchmarkSerial, benchmarkParallel, serial, parallel} mode;
-        void serialTick(Time_t currentTime);
-        void parallelTick(Time_t currentTime);
+        void serialTick(SimTime_t currentTime);
+        void parallelTick(SimTime_t currentTime);
         bool allChildrenDetermined();
 };
 }

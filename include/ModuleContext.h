@@ -1,6 +1,5 @@
 #ifndef WOLF_SIM_MODULE_CONTEXT_H
 #define WOLF_SIM_MODULE_CONTEXT_H
-#include "wolf_sim.h"
 #include <mutex>
 #include <atomic>
 #include <iostream>

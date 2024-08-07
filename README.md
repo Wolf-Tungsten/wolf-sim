@@ -15,7 +15,7 @@
 ### initRoutine
 
 1. 初始化模块的仿真时间
-2. 初始化 ModuleStatus
+2. 初始化 modulePhase
 3. 调用用户重载的 init()
 4. 调用子模块的 initRoutine
 

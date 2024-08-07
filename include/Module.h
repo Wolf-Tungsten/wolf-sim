@@ -9,36 +9,44 @@
 #include <any>
 #include <map>
 #include <memory>
-#include <string>
 #include <sstream>
+#include <string>
 
-#include "ModuleContext.h"
 #include "ChildTickScheduler.h"
+#include "ModuleContext.h"
+#include "SimTime.h"
 
 namespace wolf_sim {
-
+class ChildTickScheduler;
 class Module : public std::enable_shared_from_this<Module> {
- public:
-  void tick();
-  void tick(Time_t tickCount);
-  void tickToEnd();
-  bool terminated();
-  void reset();
   friend class Module;
   friend class ChildTickScheduler;
-  Time_t whatTime() { return currentTime; }
+  template <typename ChildModuleType>
+  friend class ChildModuleRef;
+  template <typename StateType>
+  friend class StateRef;
+  template <typename T>
+  friend class InputRef;
+  template <typename T>
+  friend class OutputRef;
+
+
+ public:
+  void tick();
+  void tick(SimTime_t tickCount);
+  void tickToTermination();
+  bool terminated();
+  void reset();
+  SimTime_t whatTime();
   void setModuleLabel(std::string label) { moduleLabel = label; }
   std::string getModuleLabel() { return moduleLabel; }
 
  protected:
-  
-  void sleepFor(Time_t time);
-  void setModuleLabel(std::string label);
+  void sleepFor(SimTime_t time);
   void terminate();
   std::ostringstream& logger();
 
  private:
-
   std::string moduleLabel;
 
   std::map<int, std::shared_ptr<Module>> childrenMap;
@@ -46,21 +54,21 @@ class Module : public std::enable_shared_from_this<Module> {
   int addChildModule(std::shared_ptr<Module> childModulePtr);
 
   std::shared_ptr<ModuleContext> mcPtr;
-  enum ModuleStatus {
-    init,
-    standBy,
-    updateChildInput,
-    tickChildren,
-    updateStateOutput
-  } moduleStatus;
-  Time_t currentTime;
-  Time_t wakeUpTime;
+  enum Phase {
+    initPhase,
+    standByPhase,
+    updateChildInputPhase,
+    tickChildrenPhase,
+    updateStateOutputPhase
+  } modulePhase;
+  SimTime_t currentTime;
+  SimTime_t wakeUpTime;
 
   std::ostringstream logStream;
 
-  ChildTickScheduler childTickScheduler;
+  std::shared_ptr<ChildTickScheduler> childTickSchedulerPtr;
 
-  void tickRoutine(Time_t currentTime);
+  void tickRoutine(SimTime_t currentTime);
   void configRoutine(std::shared_ptr<ModuleContext> mcPtr);
   void initRoutine();
 

@@ -5,13 +5,22 @@
 
 #include "Module.h"
 
+#define ChildModuleWithLabel(name, ChildModuleType, label) \
+  wolf_sim::ChildModuleRef<ChildModuleType> name = \
+      wolf_sim::ChildModuleRef<ChildModuleType>(this, label);
+
+#define ChildModule(name, ChildModuleType) \
+  wolf_sim::ChildModuleRef<ChildModuleType> name = \
+      wolf_sim::ChildModuleRef<ChildModuleType>(this, #name);
+      
 namespace wolf_sim {
 template <typename ChildModuleType>
 class ChildModuleRef {
  public:
-  ChildModuleRef(Module* mPtr) {
+  ChildModuleRef(Module* mPtr, std::string label) {
     this->mPtr = mPtr;
-    childModulePtr = std::shared_ptr<ChildModuleType>();
+    childModulePtr = std::make_shared<ChildModuleType>();
+    childModulePtr -> setModuleLabel(label);
     mPtr->addChildModule(childModulePtr);
   }
   std::shared_ptr<ChildModuleType> operator->() { return childModulePtr; }
