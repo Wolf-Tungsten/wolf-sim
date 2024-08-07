@@ -6,6 +6,8 @@
 - [简介](#简介)
 - [安装](#安装)
 - [快速上手教程](#快速上手教程)
+  - [导入头文件](#导入头文件)
+  - [定义生产者模块](#定义生产者模块)
   
 # 简介
 
@@ -41,17 +43,62 @@ target_link_libraries(main_executable PRIVATE wolf_sim)
 
 # 快速上手教程
 
-在这个例子中，我们将展示一个生产者-消费者系统的设计过程。
+在这个例子中，我们将展示一个生产者-消费者系统在 Wolf-Sim 中的建模方法。
+
+该系统的行为描述如下：
+* 生产者每周期产生 TOTAL_PAYLOAD 个负载（用整数表示）
+* 消费者处理一个负载所需的时间为 PROCESS_DELAY 个周期
+* 消费者处理负载期间，生产者被阻塞，不会产生新的负载
+* 生产者和消费者之间通过一对 valid-ready 信号握手
+
+我们将建立三个模块：
+* Producer：生产者模块
+* Consumer：消费者模块
+* Top：顶层模块
+
+
 
 ## 导入头文件
+
+并且定义一些常量
     
-    ```cpp
-    #include "wolf_sim.h"
-    ```
+```cpp
+#include "wolf_sim.h"
+
+const int TOTAL_PAYLOAD = 20;
+const int PROCESS_DELAY = 3;
+```
 
 ## 定义生产者模块
 
-    ```cpp
-    
-    ```
+```cpp
+class Producer : public wolf_sim::Module {
+ public:
+  /* 端口定义 */
+  Output(payloadValid, bool);
+  Output(payload, int);
+  Input(payloadReady, bool);
+
+ private:
+  /* 状态定义 */
+  Reg(nextPayload, int);
+
+  /* 初始化函数 */
+  void init() {
+    nextPayload = 0;
+    payloadValid = false;
+  }
+
+  /* 状态更新函数 */
+  void updateStateOutput() {
+    if (payloadValid && payloadReady) {
+      logger() << "Producing payload " << payload << std::endl;
+      nextPayload = nextPayload + 1;
+    }
+    payloadValid = true;
+    payload = nextPayload;
+  }
+};
+```
+
 

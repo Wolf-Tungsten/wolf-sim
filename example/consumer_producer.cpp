@@ -2,28 +2,30 @@
 
 #include "wolf_sim.h"
 
-const int TOTAL_PAYLOAD = 2000;
-const int PROCESS_DELAY = 1;
+const int TOTAL_PAYLOAD = 20;
+const int PROCESS_DELAY = 3;
 
 class Producer : public wolf_sim::Module {
  public:
-  /* 端口定义部分 */
+  /* 端口定义 */
   Output(payloadValid, bool);
   Output(payload, int);
   Input(payloadReady, bool);
 
  private:
-  /* 状态定义部分 */
+  /* 状态定义 */
   Reg(nextPayload, int);
 
+  /* 初始化函数 */
   void init() {
     nextPayload = 0;
     payloadValid = false;
   }
 
+  /* 状态更新函数 */
   void updateStateOutput() {
-    if (*payloadValid && *payloadReady) {
-      logger() << "Producing payload " << *payload << std::endl;
+    if (payloadValid && payloadReady) {
+      logger() << "Producing payload " << payload << std::endl;
       nextPayload = nextPayload + 1;
     }
     payloadValid = true;
@@ -33,22 +35,25 @@ class Producer : public wolf_sim::Module {
 
 class Consumer : public wolf_sim::Module {
  public:
-  /* 端口定义部分 */
+  /* 端口定义 */
   Input(payloadValid, bool);
   Input(payload, int);
   Output(payloadReady, bool);
 
  private:
+  /* 状态定义 */
   Reg(busyCount, int);
 
+  /* 初始化函数 */
   void init() {
     busyCount = 0;
     payloadReady = true;
   }
 
+  /* 状态和输出更新函数 */
   void updateStateOutput() {
     if (payloadValid && payloadReady) {
-      busyCount = PROCESS_DELAY;
+      busyCount = PROCESS_DELAY - 1;
       if (payload == TOTAL_PAYLOAD) {
         terminate();
         return;
@@ -65,25 +70,44 @@ class Consumer : public wolf_sim::Module {
 };
 
 class Top : public wolf_sim::Module {
+ public:
+  /* 端口定义 */
+  Input(anUselessInput, int);
+  Output(anUselessOutput, int);
+
  private:
-  Reg(dumy, int);
+  /* 子模块定义 */
   ChildModule(producer, Producer);
-  ChildModuleWithLabel(consumer, Consumer, "consumer");
+  ChildModuleWithLabel(consumer, Consumer, "consumer");  // 为子模块显式设置标签
+
+  /* 子模块输入更新函数 */
   void updateChildInput() {
     consumer->payloadValid = producer->payloadValid;
     consumer->payload = producer->payload;
     producer->payloadReady = consumer->payloadReady;
   }
+
+  /* 状态和输出更新函数 */
+  void updateStateOutput() { anUselessOutput = anUselessInput + 47; }
 };
 
 int main() {
   Top top;
-  top.tickToTermination();
-  top.reset();
-  while(!top.terminated()){
+  // tick once;
+  top.anUselessInput = 19780823;
+  top.tick();
+  std::cout << "anUselessOutput: " << top.anUselessOutput << std::endl;
+  // tick 10 times;
+  top.tick(10);
+  // tick to termination;
+  while (!top.terminated()) {
     top.tick();
   }
+
+  std::cout << ">> reset the model and start again <<" << std::endl;
+  // reset
   top.reset();
-  top.tick(100);
+  // and then another way to tick to termination
+  top.tickToTermination();
   return 0;
 }

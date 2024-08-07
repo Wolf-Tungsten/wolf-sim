@@ -37,8 +37,6 @@ class StateRef {
 
   operator const T&() { return value; }
 
-  const T& operator*() { return value; }
-
   const T& r() { return value; }
 
   T& w() {
