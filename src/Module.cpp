@@ -1,5 +1,5 @@
 #include "Module.h"
-
+#include <sstream>
 namespace wolf_sim {
 
 void Module::reset() { mcPtr = nullptr; }
@@ -43,8 +43,16 @@ void Module::tickRoutine(Time_t currentTime) {
   /* 更新当前模块状态输出 */
   moduleStatus = ModuleStatus::updateStateOutput;
   updateStateOutput();
+  /* 将当前模块的 log 输出*/
+  if(!logStream.str().empty()) {
+    mcPtr->safeLog(logStream.str());
+    logStream.str("");
+    logStream.clear();
+  }
   /* 状态恢复到 standby */
   moduleStatus = ModuleStatus::standBy;
+  /* 推进 currentTime */
+  ++currentTime;
 }
 
 void Module::sleepFor(Time_t time) { wakeUpTime = currentTime + time; }
@@ -65,13 +73,29 @@ Time_t Module::whatTime() {
   }
 }
 
+std::ostringstream& Module::logger() {
+  if(moduleLabel.empty()) {
+    logStream << "[*" << static_cast<void*>(this) << " @ " << whatTime() << "] " << std::endl;
+  } else {
+    logStream << "[" << getModuleLabel() << " @ " << whatTime() << "] " << std::endl;
+  }
+  return logStream;
+}
+
+void Module::terminate() {
+  if (mcPtr != nullptr) {
+    mcPtr->setEnd(true);
+  }
+}
+
+
+/* 顶层模块调用 tick、tickToEnd 方法 */
 void Module::tick() {
-  /* 顶层模块调用的方法 */
   /* 首先判断 mcPtr 是否为空，如果为空则是模型第一次 tick */
   if (mcPtr == nullptr) {
     /* 创建 ModuleContext 对象 */
     mcPtr = std::make_shared<ModuleContext>();
-    mcPtr -> setEnd(false);
+    mcPtr->setEnd(false);
     /* 调用 configRoutine 方法 */
     configRoutine(mcPtr);
     /* 调用 initRoutine 方法 */

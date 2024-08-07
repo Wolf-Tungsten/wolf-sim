@@ -24,15 +24,19 @@ class Module : public std::enable_shared_from_this<Module> {
   void reset();
   friend class Module;
   Time_t whatTime() { return currentTime; }
+  void setModuleLabel(std::string label) { moduleLabel = label; }
+  std::string getModuleLabel() { return moduleLabel; }
 
  protected:
   
   void sleepFor(Time_t time);
   void setModuleLabel(std::string label);
-  void log(std::string msg);
   void terminate();
+  std::ostringstream& logger();
 
  private:
+
+  std::string moduleLabel;
 
   std::map<int, std::shared_ptr<Module>> childrenMap;
   int nextChildrenId;
@@ -48,6 +52,8 @@ class Module : public std::enable_shared_from_this<Module> {
   } moduleStatus;
   Time_t currentTime;
   Time_t wakeUpTime;
+
+  std::ostringstream logStream;
 
   void tickRoutine(Time_t currentTime);
   void configRoutine(std::shared_ptr<ModuleContext> mcPtr);
