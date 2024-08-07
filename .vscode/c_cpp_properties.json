@@ -14,11 +14,27 @@
             "configurationProvider": "ms-vscode.cmake-tools"
         },
         {
-            "name":"Mac",
+            "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/include"
-            ] 
+            ],
+            "macFrameworkPath": [
+                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "macos-clang-x64",
+            "mergeConfigurations": false,
+            "compilerPath": "/usr/bin/clang",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/**",
+                    "${workspaceFolder}/include",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

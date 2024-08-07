@@ -10,8 +10,10 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <sstream>
 
 #include "ModuleContext.h"
+#include "ChildTickScheduler.h"
 
 namespace wolf_sim {
 
@@ -20,9 +22,10 @@ class Module : public std::enable_shared_from_this<Module> {
   void tick();
   void tick(Time_t tickCount);
   void tickToEnd();
-  bool end();
+  bool terminated();
   void reset();
   friend class Module;
+  friend class ChildTickScheduler;
   Time_t whatTime() { return currentTime; }
   void setModuleLabel(std::string label) { moduleLabel = label; }
   std::string getModuleLabel() { return moduleLabel; }
@@ -55,10 +58,11 @@ class Module : public std::enable_shared_from_this<Module> {
 
   std::ostringstream logStream;
 
+  ChildTickScheduler childTickScheduler;
+
   void tickRoutine(Time_t currentTime);
   void configRoutine(std::shared_ptr<ModuleContext> mcPtr);
   void initRoutine();
-  void tickChildren(Time_t currentTime);
 
   /* 留给子类重载的方法 */
   virtual void config(){};

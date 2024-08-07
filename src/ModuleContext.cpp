@@ -1,6 +1,3 @@
-#ifndef WOLF_SIM_MODULE_CONTEXT_H   
-#define WOLF_SIM_MODULE_CONTEXT_H
-
 #include "wolf_sim.h"
 
 namespace wolf_sim {
@@ -9,13 +6,12 @@ namespace wolf_sim {
     std::cout << log;
   }
 
-  void ModuleContext::setEnd(bool value) {
-    end = value;
+  void ModuleContext::setTerminated(bool value) {
+    terminated = value;
   }
 
-  bool ModuleContext::isEnd() {
-    return end;
+  bool ModuleContext::getTerminated() {
+    return terminated;
   }
 }  // namespace wolf_sim
 
-#endif

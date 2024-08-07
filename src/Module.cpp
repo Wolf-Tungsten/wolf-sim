@@ -5,6 +5,7 @@ namespace wolf_sim {
 void Module::reset() { mcPtr = nullptr; }
 
 void Module::configRoutine(std::shared_ptr<ModuleContext> mcPtr) {
+  tickScheduler.setup(shared_from_this());
   this->mcPtr = mcPtr;
   /* 调用当前模块的 config 方法 */
   config();
@@ -39,7 +40,7 @@ void Module::tickRoutine(Time_t currentTime) {
   updateChildInput();
   /* 递归调用子模块的 tickRoutine */
   moduleStatus = ModuleStatus::tickChildren;
-  tickChildren(currentTime);
+  tickScheduler.scheduledTick(currentTime);
   /* 更新当前模块状态输出 */
   moduleStatus = ModuleStatus::updateStateOutput;
   updateStateOutput();
@@ -57,9 +58,9 @@ void Module::tickRoutine(Time_t currentTime) {
 
 void Module::sleepFor(Time_t time) { wakeUpTime = currentTime + time; }
 
-bool Module::end() {
+bool Module::terminated() {
   if (mcPtr != nullptr) {
-    return mcPtr->isEnd();
+    return mcPtr->getTerminated();
   } else {
     return false;
   }
@@ -84,7 +85,7 @@ std::ostringstream& Module::logger() {
 
 void Module::terminate() {
   if (mcPtr != nullptr) {
-    mcPtr->setEnd(true);
+    mcPtr->setTerminated(true);
   }
 }
 
@@ -95,7 +96,7 @@ void Module::tick() {
   if (mcPtr == nullptr) {
     /* 创建 ModuleContext 对象 */
     mcPtr = std::make_shared<ModuleContext>();
-    mcPtr->setEnd(false);
+    mcPtr->setTerminated(false);
     /* 调用 configRoutine 方法 */
     configRoutine(mcPtr);
     /* 调用 initRoutine 方法 */
@@ -106,13 +107,13 @@ void Module::tick() {
 }
 
 void Module::tick(Time_t tickCount) {
-  for (Time_t i = 0; i < tickCount && !end(); i++) {
+  for (Time_t i = 0; i < tickCount && !terminated(); i++) {
     tick();
   }
 }
 
 void Module::tickToEnd() {
-  while (!end()) {
+  while (!terminated()) {
     tick();
   }
 }

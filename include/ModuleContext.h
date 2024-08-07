@@ -9,11 +9,11 @@ namespace wolf_sim {
 class ModuleContext {
  public:
   void safeLog(const std::string& log);
-  void setEnd(bool value);
-  bool isEnd();
+  void setTerminated(bool value);
+  bool getTerminated();
   private:
   std::mutex logMutex;
-  std::atomic<bool> end;
+  std::atomic<bool> terminated;
 };
 }  // namespace wolf_sim
 
