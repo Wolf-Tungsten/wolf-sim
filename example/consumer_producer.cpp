@@ -8,14 +8,13 @@ const int PROCESS_DELAY = 1;
 class Producer : public wolf_sim::Module {
  public:
   /* 端口定义部分 */
-
   Output(payloadValid, bool);
   Output(payload, int);
-  Output(payloadReady, bool);
+  Input(payloadReady, bool);
 
  private:
+  /* 状态定义部分 */
   Reg(nextPayload, int);
-  Reg(vectorState, std::vector<int>);
 
   void init() {
     nextPayload = 0;
@@ -28,8 +27,7 @@ class Producer : public wolf_sim::Module {
       nextPayload = nextPayload + 1;
     }
     payloadValid = true;
-    payload = nextPayload.r();
-    vectorState.w().push_back(nextPayload.r());
+    payload = nextPayload;
   }
 };
 
@@ -44,31 +42,31 @@ class Consumer : public wolf_sim::Module {
   Reg(busyCount, int);
 
   void init() {
-    busyCount.w() = 0;
-    payloadReady.w() = true;
+    busyCount = 0;
+    payloadReady = true;
   }
 
   void updateStateOutput() {
-    if (*payloadValid && *payloadReady) {
-      //busyCount.w() = PROCESS_DELAY;
+    if (payloadValid && payloadReady) {
       busyCount = PROCESS_DELAY;
-      if (*payload == TOTAL_PAYLOAD) {
+      if (payload == TOTAL_PAYLOAD) {
         terminate();
         return;
       }
-      logger() << "Consuming payload " << *payload << std::endl;
+      logger() << "Consuming payload " << payload << std::endl;
     }
-    if (*busyCount > 0) {
-      busyCount.w() = busyCount.r() - 1;
-      payloadReady.w() = false;
+    if (busyCount > 0) {
+      busyCount = busyCount - 1;
+      payloadReady = false;
     } else {
-      payloadReady.w() = true;
+      payloadReady = true;
     }
   }
 };
 
 class Top : public wolf_sim::Module {
  private:
+  Reg(dumy, int);
   ChildModule(producer, Producer);
   ChildModuleWithLabel(consumer, Consumer, "consumer");
   void updateChildInput() {

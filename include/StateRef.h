@@ -14,12 +14,24 @@
 namespace wolf_sim {
 template <typename T>
 class StateRef {
+  template <typename U>
+  friend class StateRef;
+  template <typename U>
+  friend class InputRef;
+  template <typename U>
+  friend class OutputRef;
+  
  public:
   StateRef(Module* mPtr) { this->mPtr = mPtr; }
 
-  StateRef& operator=(T newValue) {
+  StateRef& operator=(const T& newValue) {
     modifyGuard();
     value = newValue;
+    return *this;
+  }
+  StateRef& operator=(const StateRef<T>& stateRef) {
+    modifyGuard();
+    value = stateRef.value;
     return *this;
   }
 
@@ -51,15 +63,26 @@ template <typename T>
 class InputRef : public StateRef<T> {
  public:
   InputRef(Module* mPtr) : StateRef<T>(mPtr) {}
-  InputRef& operator=(T newValue) {
+  InputRef& operator=(const T& newValue) {
     this->modifyGuard();
     this->value = newValue;
+    return *this;
+  }
+  InputRef& operator=(const StateRef<T>& stateRef) {
+    this->modifyGuard();
+    this->value = stateRef.value;
+    return *this;
+  }
+  InputRef& operator=(const InputRef<T>& inputRef) {
+    this->modifyGuard();
+    this->value = inputRef.value;
     return *this;
   }
 
  protected:
   void modifyGuard() override {
-    if (this->mPtr->modulePhase != Module::Phase::standByPhase) {
+    if (this->mPtr->modulePhase != Module::Phase::standByPhase &&
+        this->mPtr->modulePhase != Module::Phase::uninitializedPhase) {
       throw std::runtime_error("Module input illegal update.");
     }
   }
@@ -69,9 +92,19 @@ template <typename T>
 class OutputRef : public StateRef<T> {
  public:
   OutputRef(Module* mPtr) : StateRef<T>(mPtr) {}
-  OutputRef& operator=(T newValue) {
+  OutputRef& operator=(const T& newValue) {
     this->modifyGuard();
     this->value = newValue;
+    return *this;
+  }
+  OutputRef& operator=(const StateRef<T>& stateRef) {
+    this->modifyGuard();
+    this->value = stateRef.value;
+    return *this;
+  }
+  OutputRef& operator=(const OutputRef<T>& outputRef) {
+    this->modifyGuard();
+    this->value = outputRef.value;
     return *this;
   }
   protected:

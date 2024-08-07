@@ -55,12 +55,13 @@ class Module : public std::enable_shared_from_this<Module> {
 
   std::shared_ptr<ModuleContext> mcPtr;
   enum Phase {
+    uninitializedPhase,
     initPhase,
     standByPhase,
     updateChildInputPhase,
     tickChildrenPhase,
     updateStateOutputPhase
-  } modulePhase;
+  } modulePhase = uninitializedPhase;
   SimTime_t currentTime;
   SimTime_t wakeUpTime;
 
