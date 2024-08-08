@@ -1,23 +1,53 @@
-# Wolf-Sim: 一个轻量化周期精确系统级仿真框架 A Lightweight Cycle-Accurate System-Level Simulation Framework
+# Wolf-Sim: A Lightweight Cycle-Accurate System-Level Simulation Framework
 
+**轻量化周期精确系统级仿真框架** 
 
 <!-- 目录 -->
-- [Wolf-Sim: 一个轻量化周期精确系统级仿真框架 A Lightweight Cycle-Accurate System-Level Simulation Framework](#wolf-sim-一个轻量化周期精确系统级仿真框架-a-lightweight-cycle-accurate-system-level-simulation-framework)
+- [Wolf-Sim: A Lightweight Cycle-Accurate System-Level Simulation Framework](#wolf-sim-a-lightweight-cycle-accurate-system-level-simulation-framework)
 - [简介](#简介)
 - [安装](#安装)
 - [快速上手教程](#快速上手教程)
   - [导入头文件](#导入头文件)
   - [定义生产者模块](#定义生产者模块)
+    - [生产者的端口定义](#生产者的端口定义)
+    - [生产者的内部状态定义](#生产者的内部状态定义)
+    - [生产者的初始化函数](#生产者的初始化函数)
+    - [生产者的状态更新函数](#生产者的状态更新函数)
+  - [定义消费者模块](#定义消费者模块)
+  - [定义顶层模块](#定义顶层模块)
+    - [顶层模块也可以定义端口](#顶层模块也可以定义端口)
+    - [子模块定义](#子模块定义)
+    - [子模块输入更新函数](#子模块输入更新函数)
+    - [顶层模块的状态和输出更新函数](#顶层模块的状态和输出更新函数)
+  - [运行仿真](#运行仿真)
+    - [设置输入，`tick()`，获取输出](#设置输入tick获取输出)
+    - [`tick(n)`](#tickn)
+    - [仿真到结束](#仿真到结束)
+    - [`reset()`](#reset)
+    - [`tickToTermination()`](#ticktotermination)
+    - [仿真的输出](#仿真的输出)
+- [完整的 Module 定义](#完整的-module-定义)
+  - [继承自 wolf\_sim::Module](#继承自-wolf_simmodule)
+  - [端口定义](#端口定义)
+  - [内部状态定义](#内部状态定义)
+  - [子模块定义](#子模块定义-1)
+  - [生命周期函数](#生命周期函数)
+- [Wolf-Sim 仿真模型的生命周期](#wolf-sim-仿真模型的生命周期)
+  - [模型配置阶段](#模型配置阶段)
+- [端口与内部状态的访问](#端口与内部状态的访问)
+- [子模块参数化以及动态创建](#子模块参数化以及动态创建)
   
 # 简介
 
-Wolf-Sim 是一个以 C++ 类库形式分发的轻量化系统级仿真框架，提供周期精确能力，支持多层次的模块化设计，用于支持数字电路系统架构的设计过程。
+Wolf-Sim 是一个以 C++ 类库形式分发的轻量化系统级仿真框架，提供周期精确能力，支持多层次的模块化设计，用于满足数字电路系统架构原型设计过程中的仿真需求。
 
-Wolf-Sim 的定位与 SystemC 类似，但更加简洁易用，并且提供仿真性能优化的可能性。
+Wolf-Sim 的定位与 SystemC 类似，但更加简洁易用。
+
+Wolf-Sim 摒弃了基于离散时间优先队列调度事件的仿真方法，提出新的仿真模型构建方法。
 
 # 安装
 
-我们推荐使用 CMake 来构建 Wolf-Sim 项目，将 Wolf-Sim 作为一个子目录添加到你的项目中。
+推荐使用 CMake 来构建 Wolf-Sim 项目，将 Wolf-Sim 作为一个子目录添加到你的项目中。
 
 添加为 git 子模块：
 
@@ -56,11 +86,11 @@ target_link_libraries(main_executable PRIVATE wolf_sim)
 * Consumer：消费者模块
 * Top：顶层模块
 
-
+[完整代码](example/consumer_producer.cpp)
 
 ## 导入头文件
 
-并且定义一些常量
+并且定义常量
     
 ```cpp
 #include "wolf_sim.h"
@@ -80,7 +110,7 @@ class Producer : public wolf_sim::Module {
   Input(payloadReady, bool);
 
  private:
-  /* 状态定义 */
+  /* 内部状态定义 */
   Reg(nextPayload, int);
 
   /* 初始化函数 */
@@ -100,5 +130,461 @@ class Producer : public wolf_sim::Module {
   }
 };
 ```
+
+生产者模块的定义包含了：端口定义、内部状态定义、初始化函数和状态更新函数四个部分，下面分别简要介绍。
+
+### 生产者的端口定义
+
+```cpp
+public:
+  Output(payloadValid, bool);
+  Output(payload, int);
+  Input(payloadReady, bool);
+```
+
+生产者模块面向外部的三个接口，共同构成一个 valid-ready 握手协议。
+
+模块的端口需要在模块外部访问，所以做为public 成员。
+
+`Input` 和 `Output` 是 Wolf-Sim 提供的宏，用于快速、整齐地定义模块的输入和输出端口。
+
+Wolf-Sim 会利用 `Input` 和 `Output` 宏限制端口只在正确的时机被读写。
+
+熟悉 Verilog 的读者可将 Output 类比为 `output reg` 端口，Input 类比为 `input` 端口。
+
+
+
+### 生产者的内部状态定义
+  
+```cpp
+private:
+  Reg(nextPayload, int);
+```
+
+生产者模块的状态只有一个：`nextPayload`，表示下一个要产生的负载。
+
+模块的内部状态不应在模块外部访问，所以做为private 成员。
+
+`Reg` 是 Wolf-Sim 提供的宏，用于定义模块的状态，类比于 Verilog 中时钟同步的寄存器。
+
+同样的，`Reg` 宏限制内部状态只在正确的时机被读写。
+
+### 生产者的初始化函数
+
+```cpp
+void init() {
+  nextPayload = 0;
+  payloadValid = false;
+}
+```
+
+`init()` 函数由用户定义，并被 Wolf-Sim 框架用于初始化模块的状态，包括初始化输出端口和内部状态。
+
+Wolf-Sim 框架会在**仿真开始前**自动调用模块的 `init()` 函数，用户无需手动调用。
+
+### 生产者的状态更新函数
+
+```cpp
+void updateStateOutput() {
+  if (payloadValid && payloadReady) {
+    logger() << "Producing payload " << payload << std::endl;
+    nextPayload = nextPayload + 1;
+  }
+  payloadValid = true;
+  payload = nextPayload;
+}
+```
+
+`updateStateOutput()` 函数由用户定义，是主要的行为描述函数。该函数根据**输入端口和当前周期的内部状态更新输出端口并计算下一周期内部状态**。
+
+Wolf-Sim 会在每个仿真周期调用模块的 `updateStateOutput()` 函数，并且保证在调用该函数之前，输入端口和内部状态均已更新。
+
+`logger()` 是 Wolf-Sim 提供的日志接口，输出的日志信息将包含模块标签和仿真时间，例如：
+
+```
+[producer @ 25] Producing payload 8
+```
+
+## 定义消费者模块
+
+```cpp
+class Consumer : public wolf_sim::Module {
+ public:
+  /* 端口定义 */
+  Input(payloadValid, bool);
+  Input(payload, int);
+  Output(payloadReady, bool);
+
+ private:
+  /* 内部状态定义 */
+  Reg(busyCount, int);
+
+  /* 初始化函数 */
+  void init() {
+    busyCount = 0;
+    payloadReady = true;
+  }
+
+  /* 状态和输出更新函数 */
+  void updateStateOutput() {
+    if (payloadValid && payloadReady) {
+      busyCount = PROCESS_DELAY - 1;
+      if (payload == TOTAL_PAYLOAD) {
+        terminate();
+        return;
+      }
+      logger() << "Consuming payload " << payload << std::endl;
+    }
+    if (busyCount > 0) {
+      busyCount = busyCount - 1;
+      payloadReady = false;
+    } else {
+      payloadReady = true;
+    }
+  }
+};
+```
+
+消费者模块的定义与生产者模块类似，只介绍重点差异之处。
+
+消费者模块的端口定义部分需要注意生产者出入方向相反。
+
+消费者模块的状态更新函数中，我们引入了 `terminate()` 函数，该函数通知仿真框架整个系统的仿真已结束。
+
+## 定义顶层模块
+
+```cpp
+class Top : public wolf_sim::Module {
+ public:
+  /* 端口定义 */
+  Input(anUselessInput, int);
+  Output(anUselessOutput, int);
+
+ private:
+  /* 子模块定义 */
+  ChildModule(producer, Producer);
+  ChildModuleWithLabel(consumer, Consumer, "consumer");  // 为子模块显式设置标签
+
+  /* 子模块输入更新函数 */
+  void updateChildInput() {
+    consumer->payloadValid = producer->payloadValid;
+    consumer->payload = producer->payload;
+    producer->payloadReady = consumer->payloadReady;
+  }
+
+  /* 状态和输出更新函数 */
+  void updateStateOutput() { anUselessOutput = anUselessInput + 47; }
+};
+```
+
+### 顶层模块也可以定义端口
+
+```cpp
+Input(anUselessInput, int);
+Output(anUselessOutput, int);
+```
+
+这些端口允许外部环境和顶层模块进行交互，使得 Wolf-Sim 可以与其他模拟器框架集成。
+
+在这里，我们定义了两个无用的端口，用于演示顶层模块的端口定义。
+
+### 子模块定义
+
+```cpp
+ChildModule(producer, Producer);
+ChildModuleWithLabel(consumer, Consumer, "consumer");
+```
+
+将 producer 和 consumer 定义为顶层模块的子模块。
+
+ChildModuleWithLabel 允许用户为子模块设置自定义标签，用于在日志中区分不同的子模块。
+
+ChildModule 指定一个默认的和子模块成员同名的标签。
+
+### 子模块输入更新函数
+
+```cpp
+void updateChildInput() {
+  consumer->payloadValid = producer->payloadValid;
+  consumer->payload = producer->payload;
+  producer->payloadReady = consumer->payloadReady;
+}
+```
+
+在 `updateChildInput()` 函数中，用户有机会根据模块当前内部状态和输入端口更新子模块的输入端口。注意，子模块的输出端口也属于父模块的内部状态，可在此处访问。
+
+在这里，我们将生产者的 `payloadValid` 和 `payload` 传递给消费者，将消费者的 `payloadReady` 传递给生产者。
+
+在一个仿真周期内，Wolf-Sim 会首先调用当前模块的 `updateChildInput()` 函数，将子模块的输入准备好；然后，子模块可以进行本周期的仿真；最后，在所有子模块仿真结束后，当前模块调用 `updateStateOutput()` 函数，依据当前模块的输入、内部状态、子模块的输出更新当前模块的输出和内部状态，本周期仿真结束。
+
+### 顶层模块的状态和输出更新函数
+
+```cpp
+void updateStateOutput() { anUselessOutput = anUselessInput + 47; }
+```
+
+顶层模块没有实际的仿真行为，这里的输出更新是为了演示顶层模块的端口功能。
+
+## 运行仿真
+
+在 main 函数中创建顶层模块对象，并用多种花式方法运行仿真：
+
+```cpp
+int main() {
+  Top top;
+  // tick once;
+  top.anUselessInput = 19780823;
+  top.tick();
+  std::cout << "anUselessOutput: " << top.anUselessOutput << " @ "
+            << top.whatTime() << std::endl;
+  // tick 10 times;
+  top.tick(10);
+  // tick to termination;
+  while (!top.terminated()) {
+    // 可在此处读取输入
+    top.tick();
+    // 可在此处读取输出
+  }
+
+  std::cout << ">> reset the model and start again <<" << std::endl;
+  // reset
+  top.reset();
+  // and then another way to tick to termination
+  top.tickToTermination();
+  return 0;
+}
+```
+
+### 设置输入，`tick()`，获取输出
+
+每次调用 tick 会推进仿真一个周期。
+
+以下代码部分展示了如何设置输入，推进一个周期，获取输出：
+
+```cpp
+  Top top;
+  // tick once;
+  top.anUselessInput = 19780823;
+  top.tick();
+  std::cout << "anUselessOutput: " << top.anUselessOutput 
+            << " @ " << top.whatTime() << std::endl;
+```
+
+在 tick 之前，可设置顶层模块的输入；在 tick 之后，可获取顶层模块的输出。
+
+该设计模式旨在便于 Wolf-Sim 建立的仿真模型与其他仿真框架集成。
+
+`whatTime()` 函数返回当前仿真时间。
+
+上述代码的输出为：
+
+```
+anUselessOutput: 19780870 @ 1
+```
+
+### `tick(n)`
+
+```cpp
+  // tick 10 times;
+  top.tick(10);
+```
+
+调用一次推进 n 个周期，等价于调用 n 次 tick，但是不修改输入，也不读取输出。
+
+### 仿真到结束
+
+```cpp
+while (!top.terminated()) {
+  // 可在此处读取输入
+  top.tick();
+  // 可在此处读取输出
+}
+```
+
+运行仿真直到结束，可在每周期操作输入和输出。
+
+### `reset()`
+
+如果仿真模型已经终止（terminated 为真），则不能继续调用 tick() 函数，需要调用 `reset()` 函数重置模型，恢复到初始状态。
+
+`tick(n)` 暗含了在仿真终止前停止的条件，即使 n 很大，也不会超过仿真终止。
+
+### `tickToTermination()`
+
+更简洁的运行到仿真终止的方法。
+
+### 仿真的输出
+
+在上述例子中，我们可以看到以下输出：
+
+```
+anUselessOutput: 19780870 @ 1
+[producer @ 1] Producing payload 0
+[consumer @ 1] Consuming payload 0
+[producer @ 4] Producing payload 1
+[consumer @ 4] Consuming payload 1
+[producer @ 7] Producing payload 2
+[consumer @ 7] Consuming payload 2
+...omit...
+[producer @ 55] Producing payload 18
+[consumer @ 55] Consuming payload 18
+[producer @ 58] Producing payload 19
+[consumer @ 58] Consuming payload 19
+[producer @ 61] Producing payload 20
+>> reset the model and start again <<
+[producer @ 1] Producing payload 0
+[consumer @ 1] Consuming payload 0
+...omit...
+[producer @ 58] Producing payload 19
+[consumer @ 58] Consuming payload 19
+[producer @ 61] Producing payload 20
+```
+
+# 完整的 Module 定义
+
+```cpp
+class MyModule : public wolf_sim::Module {
+ public:
+  /* 端口定义 */
+  Input(inputPort, int);
+  Output(outputPort, int);
+
+ private:
+  /* 内部状态定义 */
+  Reg(internalState, int);
+  /* 子模块定义 */
+  ChildModule(childModuleName, ChildModuleType);
+  ChildModuleWithLabel(childModuleName, ChildModuleType, "$custom~label");
+
+  /* 配置函数 */
+  void config() {/* 对子模块进行参数化配置 */};
+
+  /* 初始化函数 */
+  void init() {/* 初始化内部状态和输出端口 */};
+
+  /* 子模块输入更新函数 */
+  void updateChildInput() {
+    childModuleName->inputPort = inputPort;
+  }
+
+  /* 状态更新函数 */
+  void updateStateOutput() {
+    outputPort = internalState + inputPort;
+    internalState = internalState + 1;
+  }
+};
+```
+## 继承自 wolf_sim::Module
+
+所有用户定义的模块都应该继承自 `wolf_sim::Module` 类。
+
+在类定义中，用户根据需要添加端口、内部状态、子模块、配置函数、初始化函数、子模块输入更新函数和状态更新函数。
+
+## 端口定义
+
+Wolf-Sim 中的模块具有输入和输出端口，用于与其他模块在仿真过程中交互。
+
+Wolf-Sim 提供了两个宏 `Input` 和 `Output` 用于定义模块的输入和输出端口。
+
+```cpp
+Input(portName, portType);
+Output(portName, portType);
+```
+
+为了能在模块外部访问端口，端口定义应该在 public 部分。
+
+端口类型要求：
+
+* 任何基础类型，如 int、bool、float 等
+* 任何可默认构造、可复制的类型，如 std::vector、std::string 等
+* 用户自定义的类型，只要满足上述要求
+
+端口的读写访问将在 [端口与内部状态的访问](#端口与内部状态的访问) 中详细介绍。
+
+## 内部状态定义
+
+Wolf-Sim 提供了 `Reg` 宏用于定义模块的内部状态。
+
+```cpp
+Reg(stateName, stateType);
+```
+
+内部状态定义应该在 private 部分，不应该在模块外部访问。
+
+内部状态的类型要求与[端口定义](#端口定义)相同。
+
+Module 的内部状态随时可读取，但只能在初始化和状态更新函数中修改。
+
+内部状态的读写访问将在 [端口与内部状态的访问](#端口与内部状态的访问) 中详细介绍。
+
+建议用户总是按照 Mealy 状态机的形式描述模块，即在状态更新函数中根据输入和当前状态计算输出和下一状态。
+
+## 子模块定义
+
+Wolf-Sim 提供了 `ChildModule` 和 `ChildModuleWithLabel` 宏用于定义模块的子模块。
+
+```cpp
+ChildModule(childModuleName, ChildModuleType);
+ChildModuleWithLabel(childModuleName, ChildModuleType, "$custom~label");
+```
+
+使用上述宏定义的子模块会自动加入到仿真模型中，并作为定义模块的子模块，用户无需手动关联。
+
+父模块可设置子模块的输入、读取子模块的输出。
+
+子模块的输出也可以视为父模块的内部状态的一部分。
+
+子模块也可以在父模块的配置函数中进行动态添加，详见[参数化子模块以及动态创建](#子模块参数化以及动态创建)。
+
+## 生命周期函数
+
+模块的生命周期函数包括：
+
+* 配置函数 `config()`
+* 初始化函数 `init()`
+* 子模块输入更新函数 `updateChildInput()`
+* 状态更新函数 `updateStateOutput()`
+
+将在 [Wolf-Sim 仿真模型的生命周期](#wolf-sim-仿真模型的生命周期) 中详细介绍。
+
+# Wolf-Sim 仿真模型的生命周期
+
+Wolf-Sim 中的模块以树状形式组织，我们将树的根节点称为顶层模块，根节点及其包含的所有子模块构成一个**仿真模型**。
+
+一个仿真程序中可以包含多个仿真模型，除非用户主动协调，每个仿真模型的生命周期都是独立的。
+
+我们将一个仿真模型的生命周期分为以下几个阶段：
+1. 模型配置阶段
+2. 状态初始化阶段
+3. 仿真运行阶段
+4. 仿真终止阶段
+
+每个仿真模型建立后都会顺序依次经历这些阶段，调用模型中各个模块的生命周期函数。用户通过在定义模块时重载这些生命周期函数，描述模块的行为，进而描述整个仿真模型的行为。
+
+仿真模型到达终止阶段后，用户可以重置仿真模型，使仿真模型返回到模块配置阶段。
+
+接下来对各个阶段进行详细介绍。
+
+## 模型配置阶段
+
+
+
+
+
+
+
+# 端口与内部状态的访问
+
+# 子模块参数化以及动态创建
+
+
+
+
+
+
+
+
+
+
 
 

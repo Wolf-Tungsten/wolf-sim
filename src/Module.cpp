@@ -3,7 +3,7 @@
 #include <sstream>
 namespace wolf_sim {
 
-void Module::reset() { mcPtr = nullptr; }
+void Module::reset() { mcPtr = nullptr; modulePhase = Phase::uninitializedPhase; }
 
 int Module::addChildModule(std::shared_ptr<Module> childModulePtr) {
   childrenMap[nextChildrenId] = childModulePtr;
@@ -11,11 +11,12 @@ int Module::addChildModule(std::shared_ptr<Module> childModulePtr) {
 }
 
 void Module::configRoutine(std::shared_ptr<ModuleContext> mcPtr) {
-  childTickSchedulerPtr = std::make_shared<ChildTickScheduler>();
-  childTickSchedulerPtr->setup(this);
   this->mcPtr = mcPtr;
   /* 调用当前模块的 config 方法 */
   config();
+  /* config 方法中允许会动态添加模块 */
+  childTickSchedulerPtr = std::make_shared<ChildTickScheduler>();
+  childTickSchedulerPtr->setup(this);
   /* 递归调用子模块的 configRoutine */
   for (auto& child : childrenMap) {
     child.second->configRoutine(mcPtr);

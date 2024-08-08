@@ -45,13 +45,13 @@ class Module : public std::enable_shared_from_this<Module> {
   void sleepFor(SimTime_t time);
   void terminate();
   std::ostringstream& logger();
+  int addChildModule(std::shared_ptr<Module> childModulePtr);
 
  private:
   std::string moduleLabel;
 
   std::map<int, std::shared_ptr<Module>> childrenMap;
   int nextChildrenId;
-  int addChildModule(std::shared_ptr<Module> childModulePtr);
 
   std::shared_ptr<ModuleContext> mcPtr;
   enum Phase {

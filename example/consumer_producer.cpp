@@ -13,7 +13,7 @@ class Producer : public wolf_sim::Module {
   Input(payloadReady, bool);
 
  private:
-  /* 状态定义 */
+  /* 内部状态定义 */
   Reg(nextPayload, int);
 
   /* 初始化函数 */
@@ -41,7 +41,7 @@ class Consumer : public wolf_sim::Module {
   Output(payloadReady, bool);
 
  private:
-  /* 状态定义 */
+  /* 内部状态定义 */
   Reg(busyCount, int);
 
   /* 初始化函数 */
@@ -96,12 +96,15 @@ int main() {
   // tick once;
   top.anUselessInput = 19780823;
   top.tick();
-  std::cout << "anUselessOutput: " << top.anUselessOutput << std::endl;
+  std::cout << "anUselessOutput: " << top.anUselessOutput << " @ "
+            << top.whatTime() << std::endl;
   // tick 10 times;
   top.tick(10);
   // tick to termination;
   while (!top.terminated()) {
+    // 可在此处读取输入
     top.tick();
+    // 可在此处读取输出
   }
 
   std::cout << ">> reset the model and start again <<" << std::endl;

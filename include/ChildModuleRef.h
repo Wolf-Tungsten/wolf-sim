@@ -12,6 +12,14 @@
 #define ChildModule(name, ChildModuleType) \
   wolf_sim::ChildModuleRef<ChildModuleType> name = \
       wolf_sim::ChildModuleRef<ChildModuleType>(this, #name);
+
+#define ChildModuleArray(name, ChildModuleType, size) \
+  std::vector<wolf_sim::ChildModuleRef<ChildModuleType>> name = \
+      std::vector<wolf_sim::ChildModuleRef<ChildModuleType>>(size, wolf_sim::ChildModuleRef<ChildModuleType>(this, #name));
+
+#define ChildModuleArrayWithLabel(name, ChildModuleType, size, label) \
+  std::vector<wolf_sim::ChildModuleRef<ChildModuleType>> name = \
+      std::vector<wolf_sim::ChildModuleRef<ChildModuleType>>(size, wolf_sim::ChildModuleRef<ChildModuleType>(this, label)); 
       
 namespace wolf_sim {
 template <typename ChildModuleType>
