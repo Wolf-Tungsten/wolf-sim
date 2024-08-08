@@ -35,12 +35,17 @@ class Producer : public wolf_sim::Module {
 
 class Consumer : public wolf_sim::Module {
  public:
+  Consumer(int maxPayload, int processDelay)
+      : maxPayload(maxPayload), processDelay(processDelay) {};
+
   /* 端口定义 */
   Input(payloadValid, bool);
   Input(payload, int);
   Output(payloadReady, bool);
 
  private:
+  int maxPayload;
+  int processDelay;
   /* 内部状态定义 */
   Reg(busyCount, int);
 
@@ -53,8 +58,8 @@ class Consumer : public wolf_sim::Module {
   /* 状态和输出更新函数 */
   void updateStateOutput() {
     if (payloadValid && payloadReady) {
-      busyCount = PROCESS_DELAY - 1;
-      if (payload == TOTAL_PAYLOAD) {
+      busyCount =  processDelay - 1;
+      if (payload == maxPayload) {
         terminate();
         return;
       }
@@ -78,8 +83,13 @@ class Top : public wolf_sim::Module {
  private:
   /* 子模块定义 */
   ChildModule(producer, Producer);
-  ChildModuleWithLabel(consumer, Consumer, "consumer");  // 为子模块显式设置标签
+  std::shared_ptr<Consumer> consumer;
 
+  void construct() {
+    consumer = std::make_shared<Consumer>(TOTAL_PAYLOAD, PROCESS_DELAY);
+    addChildModule(consumer);
+    consumer->setModuleLabel("dynamic consumer");
+  }
   /* 子模块输入更新函数 */
   void updateChildInput() {
     consumer->payloadValid = producer->payloadValid;
@@ -93,6 +103,7 @@ class Top : public wolf_sim::Module {
 
 int main() {
   Top top;
+  top.setDeterministic(true);
   // tick once;
   top.anUselessInput = 19780823;
   top.tick();
@@ -102,7 +113,7 @@ int main() {
   top.tick(10);
   // tick to termination;
   while (!top.terminated()) {
-    // 可在此处设置输入
+    // 可在此处读取输入
     top.tick();
     // 可在此处读取输出
   }

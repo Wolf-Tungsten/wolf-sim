@@ -29,7 +29,8 @@ class ChildModuleRef {
     this->mPtr = mPtr;
     childModulePtr = std::make_shared<ChildModuleType>();
     childModulePtr -> setModuleLabel(label);
-    mPtr->addChildModule(childModulePtr);
+    // 静态生成的模块先加入到父模块的静态子模块列表中
+    mPtr->staticChildren.push_back(childModulePtr);
   }
   std::shared_ptr<ChildModuleType> operator->() { return childModulePtr; }
 

@@ -40,6 +40,7 @@ class Module : public std::enable_shared_from_this<Module> {
   SimTime_t whatTime();
   void setModuleLabel(std::string label) { moduleLabel = label; }
   std::string getModuleLabel() { return moduleLabel; }
+  void setDeterministic(bool v) { deterministic = v; }
 
  protected:
   void sleepFor(SimTime_t time);
@@ -50,18 +51,19 @@ class Module : public std::enable_shared_from_this<Module> {
  private:
   std::string moduleLabel;
 
+  std::vector<std::shared_ptr<Module>> staticChildren;
   std::map<int, std::shared_ptr<Module>> childrenMap;
   int nextChildrenId;
 
   std::shared_ptr<ModuleContext> mcPtr;
   enum Phase {
-    uninitializedPhase,
+    constructPhase,
     initPhase,
     standByPhase,
     updateChildInputPhase,
     tickChildrenPhase,
     updateStateOutputPhase
-  } modulePhase = uninitializedPhase;
+  } modulePhase = constructPhase;
   SimTime_t currentTime;
   SimTime_t wakeUpTime;
 
@@ -69,12 +71,14 @@ class Module : public std::enable_shared_from_this<Module> {
 
   std::shared_ptr<ChildTickScheduler> childTickSchedulerPtr;
 
+  bool deterministic = false;
+
   void tickRoutine(SimTime_t currentTime);
-  void configRoutine(std::shared_ptr<ModuleContext> mcPtr);
+  void constructRoutine(std::shared_ptr<ModuleContext> mcPtr);
   void initRoutine();
 
   /* 留给子类重载的方法 */
-  virtual void config(){};
+  virtual void construct(){};
   virtual void init(){};
   virtual void updateChildInput(){};
   virtual void updateStateOutput(){};

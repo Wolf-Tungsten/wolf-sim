@@ -33,9 +33,16 @@
   - [子模块定义](#子模块定义-1)
   - [生命周期函数](#生命周期函数)
 - [Wolf-Sim 仿真模型的生命周期](#wolf-sim-仿真模型的生命周期)
-  - [模型配置阶段](#模型配置阶段)
+  - [模型构造阶段](#模型构造阶段)
+  - [状态初始化阶段](#状态初始化阶段)
+  - [仿真运行阶段](#仿真运行阶段)
+  - [仿真终止阶段](#仿真终止阶段)
 - [端口与内部状态的访问](#端口与内部状态的访问)
-- [子模块参数化以及动态创建](#子模块参数化以及动态创建)
+  - [基本类型端口或内部状态的访问](#基本类型端口或内部状态的访问)
+  - [复杂类型端口或内部状态的访问](#复杂类型端口或内部状态的访问)
+- [子模块动态创建以及参数化](#子模块动态创建以及参数化)
+- [仿真模型的运行](#仿真模型的运行)
+- [仿真确定性](#仿真确定性)
   
 # 简介
 
@@ -341,7 +348,7 @@ int main() {
   top.tick(10);
   // tick to termination;
   while (!top.terminated()) {
-    // 可在此处读取输入
+    // 可在此设置输入
     top.tick();
     // 可在此处读取输出
   }
@@ -395,7 +402,7 @@ anUselessOutput: 19780870 @ 1
 
 ```cpp
 while (!top.terminated()) {
-  // 可在此处读取输入
+  // 可在此处设置输入
   top.tick();
   // 可在此处读取输出
 }
@@ -456,8 +463,8 @@ class MyModule : public wolf_sim::Module {
   ChildModule(childModuleName, ChildModuleType);
   ChildModuleWithLabel(childModuleName, ChildModuleType, "$custom~label");
 
-  /* 配置函数 */
-  void config() {/* 对子模块进行参数化配置 */};
+  /* 构造函数 */
+  void construct() {/* 对子模块进行参数化配置 */};
 
   /* 初始化函数 */
   void init() {/* 初始化内部状态和输出端口 */};
@@ -478,7 +485,7 @@ class MyModule : public wolf_sim::Module {
 
 所有用户定义的模块都应该继承自 `wolf_sim::Module` 类。
 
-在类定义中，用户根据需要添加端口、内部状态、子模块、配置函数、初始化函数、子模块输入更新函数和状态更新函数。
+在类定义中，用户根据需要添加端口、内部状态、子模块、构造函数、初始化函数、子模块输入更新函数和状态更新函数。
 
 ## 端口定义
 
@@ -534,13 +541,13 @@ ChildModuleWithLabel(childModuleName, ChildModuleType, "$custom~label");
 
 子模块的输出也可以视为父模块的内部状态的一部分。
 
-子模块也可以在父模块的配置函数中进行动态添加，详见[参数化子模块以及动态创建](#子模块参数化以及动态创建)。
+子模块也可以在父模块的构造函数中进行动态添加，详见[参数化子模块以及动态创建](#子模块动态创建以及参数化)。
 
 ## 生命周期函数
 
 模块的生命周期函数包括：
 
-* 配置函数 `config()`
+* 构造函数 `construct()`
 * 初始化函数 `init()`
 * 子模块输入更新函数 `updateChildInput()`
 * 状态更新函数 `updateStateOutput()`
@@ -549,42 +556,204 @@ ChildModuleWithLabel(childModuleName, ChildModuleType, "$custom~label");
 
 # Wolf-Sim 仿真模型的生命周期
 
-Wolf-Sim 中的模块以树状形式组织，我们将树的根节点称为顶层模块，根节点及其包含的所有子模块构成一个**仿真模型**。
+Wolf-Sim 中的模块以树状形式组织，树的根节点是**顶层模块**，一个顶层模块及其包含的所有子模块构成的一棵模块树，称为一个**仿真模型**。
 
 一个仿真程序中可以包含多个仿真模型，除非用户主动协调，每个仿真模型的生命周期都是独立的。
 
 我们将一个仿真模型的生命周期分为以下几个阶段：
-1. 模型配置阶段
+1. 模型构造阶段
 2. 状态初始化阶段
 3. 仿真运行阶段
 4. 仿真终止阶段
 
 每个仿真模型建立后都会顺序依次经历这些阶段，调用模型中各个模块的生命周期函数。用户通过在定义模块时重载这些生命周期函数，描述模块的行为，进而描述整个仿真模型的行为。
 
-仿真模型到达终止阶段后，用户可以重置仿真模型，使仿真模型返回到模块配置阶段。
+仿真模型到达终止阶段后，用户可以重置仿真模型，使仿真模型返回到模块构造阶段，然后重新经历整个生命周期。
 
 接下来对各个阶段进行详细介绍。
 
-## 模型配置阶段
+## 模型构造阶段
 
+在这个阶段，Wolf-Sim 会从**顶层模块**开始，**自顶向下**递归调用每个模块的 `construct()` 生命周期函数。
 
+在 `construct()` 函数中，用户可以动态创建子模块，为子模块进行参数化配置。
 
+Wolf-Sim 会保证父模块的 `construct()` 函数在子模块的 `construct()` 函数之前调用，所以用户可以使用父模块的成员变量来配置子模块。
 
+关于子模块的动态创建和参数化，将在[子模块动态创建以及参数化](#子模块动态创建以及参数化)中详细介绍。
 
+## 状态初始化阶段
 
+完成模型构造阶段后，Wolf-Sim 会**自底向上**递归调用每个模块的 `init()` 生命周期函数。
+
+在 `init()` 函数中，用户可以初始化模块的内部状态和输出端口，设置初始值。
+
+输出端口可类比于 Verilog 中 output reg 端口，因此也可以被初始化。
+
+`init()` 函数自底向上调用的顺序确保了子模块的初始化在父模块之前完成，因此父模块在初始化时，可以依赖子模块的输出端口。
+
+## 仿真运行阶段
+
+从用户视角看，模型构造和状态初始化阶段是自动完成的，用户无需手动调用，完成上述两个阶段后，仿真模型准备好开始运行。
+
+用户此时可以设置顶层模块的输入端口，然后调用 `tick()` 函数运行一个周期的仿真。
+
+为了便于理解，我们可以视作模型中的每一个模块都有一个 `tick()` 函数，该函数的流程如下：
+
+1. 调用用户重载定义的 `updateChildInput()` 生命周期函数，在该函数中，用户可根据当前模块的**内部状态**和**输入端口**，更新子模块的输入端口。
+2. 调用所有子模块的 `tick()` 函数，子模块仿真推进到本周期结束。
+3. 此时，子模块的输出端口均已更新，调用用户重载定义的 `updateStateOutput()` 生命周期函数，在该函数中，用户可根据当前模块的**内部状态**、**输入端口**和**子模块的输出端口**，更新当前模块的**输出端口**和**内部状态**。
+
+## 仿真终止阶段
+
+在仿真运行阶段，用户可在任意一个模块中 `updateStateOutput()` 函数中调用 `terminate()` 函数，通知 Wolf-Sim 框架该模型的仿真已结束，在顶层模块的 `tick()` 函数返回后，模型进入仿真终止阶段。
+
+处于仿真终止阶段的模型调用 `terminated()` 函数会返回 true，继续调用 tick() 方法会发生运行时错误，该机制保障用户不会错误的推进已终止的模型。
+
+已终止的仿真模型如需重新运行仿真，用户需要调用 `reset()` 函数，将模型恢复到状态初始化阶段。
 
 # 端口与内部状态的访问
 
-# 子模块参数化以及动态创建
+Wolf-Sim 提供了 `Input`、`Output` 和 `Reg` 宏用于定义模块的输入、输出端口和内部状态。
 
+这些宏会自动为用户定义的模块生成对应的成员变量，用户可以通过这些成员变量访问端口和内部状态。
 
+同时，Wolf-Sim 会对端口和内部状态的修改加以限制，保证在正确的时机修改端口和内部状态，而非法的修改会导致运行时错误。
 
+下面以 `Reg` 为例进行讲解，假设定义时包含了以下定义：
 
+```
+Reg(myIntState, int);
+Reg(myBoolState, bool);
+Reg(myVectorState, std::vector<int>);
+Reg(myCustomState, MyCustomType);
+```
 
+## 基本类型端口或内部状态的访问
 
+在生命周期函数中，基本类型的端口和内部状态访问几乎可以按照原类型的方式进行，例如：
 
+```cpp
+if(myBoolState) {
+  myIntState = 1;
+}
+```
 
+但是++、--、+=、-=、*=、/=、%=、&=、|=、^=、<<=、>>=等运算符尚不支持，需要使用赋值运算符。
 
+```cpp
+myIntState = myIntState + 1;
+```
 
+## 复杂类型端口或内部状态的访问
+
+可以分别通过 `r()` 和  `w()` 方法获取端口或内部状态的只读和可写引用。
+
+```cpp
+if(myVectorState.r().size() < 10) {
+  myVectorState.w().push_back(1);
+}
+
+myCustomState.r().someReadMethod();
+myCustomState.w().someWriteMethod();
+```
+
+# 子模块动态创建以及参数化
+
+为了更好地支持模块化设计以及设计空间探索，Wolf-Sim 提供了动态创建子模块的功能。
+
+[一个例子](example/consumer_producer_dynamic.cpp)
+
+在上述例子中，消费者模块的构造函数具有两个参数，因此不能使用 `ChildModule` 宏直接定义。
+
+```cpp
+class Consumer : public wolf_sim::Module {
+ public:
+  Consumer(int maxPayload, int processDelay)
+      : maxPayload(maxPayload), processDelay(processDelay) {};
+      // ...
+}
+```
+
+在顶层模块的 construct 函数中，可以动态创建消费者模块，并为其传递参数。
+
+```cpp
+class Top : public wolf_sim::Module {
+  // ...
+  std::shared_ptr<Consumer> consumer;
+
+  void construct() {
+    consumer = std::make_shared<Consumer>(TOTAL_PAYLOAD, PROCESS_DELAY);
+    addChildModule(consumer);
+    consumer->setModuleLabel("dynamic consumer");
+  }
+  // ...
+};
+```
+
+在 construct() 函数中，用户需要使用 `std::make_shared` 函数将子模块初始化成智能指针，并使用 `addChildModule` 函数将子模块添加到父模块中。
+
+如需设置标签，可以使用 `setModuleLabel` 函数。
+
+此外，还需要在顶层模块中持有子模块的智能指针，以保证子模块能够在其他生命周期函数中被访问。
+
+注意，子模块的动态创建仅能在 construct 函数中进行，不能在其他生命周期函数中进行。
+
+# 仿真模型的运行
+
+Wolf-Sim 提供了多种仿真模型运行的方法，用户可以根据需求选择合适的方法。
+
+最简单的运行模式如下：
+
+```cpp  
+Top top;
+while(!top.terminated()) {
+  top.inputPort = someInput;
+  top.tick();
+  someOutput = top.outputPort;
+}
+```
+
+设置输入、仿真一拍、获取输出，循环直到仿真终止。
+
+如果不关心顶层模块的输入和输出，可以使用 `tickToTermination()` 函数：
+
+```cpp
+Top top;
+top.tickToTermination();
+```
+
+如果不关心顶层模块的输入和输出，但只仿真固定时长，可以使用 `tick(n)` 函数：
+
+```cpp
+Top top;
+top.tick(100);
+```
+
+如果需要重置模型，可以使用 `reset()` 函数：
+
+```cpp
+Top top;
+top.tickToTermination();
+top.reset();
+// 重新运行
+top.tickToTermination();
+```
+
+# 仿真确定性
+
+Wolf-Sim 会尝试利用自动多线程机制，以提高仿真运行效率，但是这可能会导致仿真结果的不确定性。
+
+考虑到一些特殊的场景下，用户可能需要保证仿真结果的确定性，Wolf-Sim 提供了 `setDeterministic()` 函数，启用仿真确定性。
+
+```cpp
+Top top;
+top.setDeterministic(true);
+top.tickToTermination();
+```
+
+顶层模块的 `setDeterministic()` 函数需要在首次调用 `tick()` 函数之前或者 `reset()` 后调用。
+
+内部模块可在 `construct()` 函数中调用 `setDeterministic()` 函数，以保证其子模块的仿真确定性。
 
 

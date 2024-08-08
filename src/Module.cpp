@@ -3,27 +3,47 @@
 #include <sstream>
 namespace wolf_sim {
 
-void Module::reset() { mcPtr = nullptr; modulePhase = Phase::uninitializedPhase; }
+void Module::reset() { 
+  mcPtr = nullptr; 
+  modulePhase = Phase::constructPhase;  
+  nextChildrenId = 0;
+  childrenMap.clear();
+}
 
 int Module::addChildModule(std::shared_ptr<Module> childModulePtr) {
+  if(modulePhase != Phase::constructPhase) {
+    throw std::runtime_error("Module can only add child in construct phase.");
+  }
   childrenMap[nextChildrenId] = childModulePtr;
   return nextChildrenId++;
 }
 
-void Module::configRoutine(std::shared_ptr<ModuleContext> mcPtr) {
+void Module::constructRoutine(std::shared_ptr<ModuleContext> mcPtr) {
+  reset();
   this->mcPtr = mcPtr;
-  /* 调用当前模块的 config 方法 */
-  config();
-  /* config 方法中允许会动态添加模块 */
+  /* 调用当前模块的 construct 方法 */
+  construct();
+  for(auto &child : staticChildren) {
+    addChildModule(child);
+  }
+  /* construct 方法中允许会动态添加模块 */
   childTickSchedulerPtr = std::make_shared<ChildTickScheduler>();
   childTickSchedulerPtr->setup(this);
-  /* 递归调用子模块的 configRoutine */
+  if(deterministic){
+    childTickSchedulerPtr->forceSerial();
+  }
+  /* 递归调用子模块的 constructRoutine */
   for (auto& child : childrenMap) {
-    child.second->configRoutine(mcPtr);
+    child.second->setDeterministic(deterministic);
+    child.second->constructRoutine(mcPtr);
   }
 }
 
 void Module::initRoutine() {
+  /* 递归调用子模块的 initRoutine */
+  for (auto& child : childrenMap) {
+    child.second->initRoutine();
+  }
   /* 模块内部变量的初始化 */
   currentTime = 0;
   wakeUpTime = 0;
@@ -31,10 +51,6 @@ void Module::initRoutine() {
   modulePhase = Phase::initPhase;
   init();
   modulePhase = Phase::standByPhase;
-  /* 递归调用子模块的 initRoutine */
-  for (auto& child : childrenMap) {
-    child.second->initRoutine();
-  }
 }
 
 void Module::tickRoutine(SimTime_t currentTime) {
@@ -110,8 +126,8 @@ void Module::tick() {
     /* 创建 ModuleContext 对象 */
     mcPtr = std::make_shared<ModuleContext>();
     mcPtr->setTerminated(false);
-    /* 调用 configRoutine 方法 */
-    configRoutine(mcPtr);
+    /* 调用 constructRoutine 方法 */
+    constructRoutine(mcPtr);
     /* 调用 initRoutine 方法 */
     initRoutine();
   }

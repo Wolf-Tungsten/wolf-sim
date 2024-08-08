@@ -80,7 +80,7 @@ class InputRef : public StateRef<T> {
  protected:
   void modifyGuard() override {
     if (this->mPtr->modulePhase != Module::Phase::standByPhase &&
-        this->mPtr->modulePhase != Module::Phase::uninitializedPhase) {
+        this->mPtr->modulePhase != Module::Phase::constructPhase) {
       throw std::runtime_error("Module input illegal update.");
     }
   }
