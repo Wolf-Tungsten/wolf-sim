@@ -22,7 +22,7 @@ class StateRef {
   friend class OutputRef;
   
  public:
-  StateRef(Module* mPtr) { this->mPtr = mPtr; }
+  StateRef(Module* mPtr) : value(T()) { this->mPtr = mPtr; }
 
   StateRef& operator=(const T& newValue) {
     modifyGuard();

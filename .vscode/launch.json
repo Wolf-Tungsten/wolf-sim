@@ -5,6 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "(lldb) mesh2d",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/example/mesh2d",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb"
+        }, 
+        {
             "name": "(lldb) consumer_producer",
             "type": "cppdbg",
             "request": "launch",

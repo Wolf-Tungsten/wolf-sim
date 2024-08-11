@@ -53,7 +53,7 @@ class Module : public std::enable_shared_from_this<Module> {
 
   std::vector<std::shared_ptr<Module>> staticChildren;
   std::map<int, std::shared_ptr<Module>> childrenMap;
-  int nextChildrenId;
+  int nextChildrenId = 0;
 
   std::shared_ptr<ModuleContext> mcPtr;
   enum Phase {
@@ -64,8 +64,8 @@ class Module : public std::enable_shared_from_this<Module> {
     tickChildrenPhase,
     updateStateOutputPhase
   } modulePhase = constructPhase;
-  SimTime_t currentTime;
-  SimTime_t wakeUpTime;
+  SimTime_t currentTime = 0;
+  SimTime_t wakeUpTime = 0;
 
   std::ostringstream logStream;
 

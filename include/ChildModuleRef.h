@@ -35,7 +35,7 @@ class ChildModuleRef {
   std::shared_ptr<ChildModuleType> operator->() { return childModulePtr; }
 
  private:
-  Module* mPtr;
+  Module* mPtr = nullptr;
   std::shared_ptr<ChildModuleType> childModulePtr;
 };
 }  // namespace wolf_sim

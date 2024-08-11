@@ -25,8 +25,8 @@ class ChildTickScheduler {
         int benchmarkCount = 0;
         double serialOverhead = 0;
         double parallelOverhead = 0;
-        Module* module;
-        enum Mode {pending, benchmarkSerial, benchmarkParallel, serial, parallel} mode;
+        Module* module = nullptr;
+        enum Mode {pending, benchmarkSerial, benchmarkParallel, serial, parallel} mode = pending;
         void serialTick(SimTime_t currentTime);
         void parallelTick(SimTime_t currentTime);
         bool allChildrenDetermined();
