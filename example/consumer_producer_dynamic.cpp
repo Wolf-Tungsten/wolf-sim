@@ -102,26 +102,26 @@ class Top : public wolf_sim::Module {
 };
 
 int main() {
-  Top top;
-  top.setDeterministic(true);
+  /* 建议总是使用智能指针保存仿真模型 */
+  std::shared_ptr<Top> top = std::make_shared<Top>();
   // tick once;
-  top.anUselessInput = 19780823;
-  top.tick();
-  std::cout << "anUselessOutput: " << top.anUselessOutput << " @ "
-            << top.whatTime() << std::endl;
+  top->anUselessInput = 19780823;
+  top->tick();
+  std::cout << "anUselessOutput: " << top->anUselessOutput << " @ "
+            << top->whatTime() << std::endl;
   // tick 10 times;
-  top.tick(10);
+  top->tick(10);
   // tick to termination;
-  while (!top.terminated()) {
-    // 可在此处读取输入
-    top.tick();
+  while (!top->terminated()) {
+    // 可在此处设置输入
+    top->tick();
     // 可在此处读取输出
   }
 
   std::cout << ">> reset the model and start again <<" << std::endl;
-  // reset
-  top.reset();
+  // create (reset) a new model
+  top = std::make_shared<Top>();
   // and then another way to tick to termination
-  top.tickToTermination();
+  top->tickToTermination();
   return 0;
 }

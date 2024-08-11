@@ -14,7 +14,6 @@ class Module;
 class ChildTickScheduler {
     public:
         void setup(Module* module);
-        void reset();
         void forceSerial();
         void forceParallel();
         bool determined();

@@ -402,7 +402,6 @@ int main() {
     mesh.setDeterministic(true);
     std::cout<<"Test "<<test<<std::endl;
     mesh.tickToTermination();
-    mesh.reset();
   }
   return 0;
 

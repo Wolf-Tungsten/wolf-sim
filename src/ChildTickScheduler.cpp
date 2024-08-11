@@ -6,10 +6,6 @@
 namespace wolf_sim {
 void ChildTickScheduler::setup(Module* module) {
   this->module = module;
-  reset();
-}
-
-void ChildTickScheduler::reset() {
   mode = Mode::pending;
   benchmarkCount = 0;
   serialOverhead = 0;

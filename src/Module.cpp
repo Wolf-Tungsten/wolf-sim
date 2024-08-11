@@ -3,13 +3,6 @@
 #include <sstream>
 namespace wolf_sim {
 
-void Module::reset() { 
-  mcPtr = nullptr; 
-  modulePhase = Phase::constructPhase;  
-  nextChildrenId = 0;
-  childrenMap.clear();
-}
-
 int Module::addChildModule(std::shared_ptr<Module> childModulePtr) {
   if(modulePhase != Phase::constructPhase) {
     throw std::runtime_error("Module can only add child in construct phase.");
@@ -19,7 +12,9 @@ int Module::addChildModule(std::shared_ptr<Module> childModulePtr) {
 }
 
 void Module::constructRoutine(std::shared_ptr<ModuleContext> mcPtr) {
-  reset();
+  modulePhase = Phase::constructPhase;  
+  nextChildrenId = 0;
+  childrenMap.clear();
   this->mcPtr = mcPtr;
   /* 调用当前模块的 construct 方法 */
   construct();
@@ -132,7 +127,7 @@ void Module::tick() {
     initRoutine();
   }
   if(terminated()) {
-    throw std::runtime_error("Module has been terminated, forget to call reset?");
+    throw std::runtime_error("Module has been terminated");
   }
   /* 调用 tickRoutine 方法 */
   tickRoutine(currentTime);

@@ -23,7 +23,7 @@
     - [设置输入，`tick()`，获取输出](#设置输入tick获取输出)
     - [`tick(n)`](#tickn)
     - [仿真到结束](#仿真到结束)
-    - [`reset()`](#reset)
+    - [重置（重建）模型](#重置重建模型)
     - [`tickToTermination()`](#ticktotermination)
     - [仿真的输出](#仿真的输出)
 - [完整的 Module 定义](#完整的-module-定义)
@@ -100,6 +100,7 @@ target_link_libraries(main_executable PRIVATE wolf_sim)
 并且定义常量
     
 ```cpp
+#include <memory> // 使用智能指针
 #include "wolf_sim.h"
 
 const int TOTAL_PAYLOAD = 20;
@@ -338,26 +339,27 @@ void updateStateOutput() { anUselessOutput = anUselessInput + 47; }
 
 ```cpp
 int main() {
-  Top top;
+  /* 建议总是使用智能指针保存仿真模型 */
+  std::shared_ptr<Top> top = std::make_shared<Top>();
   // tick once;
-  top.anUselessInput = 19780823;
-  top.tick();
-  std::cout << "anUselessOutput: " << top.anUselessOutput << " @ "
-            << top.whatTime() << std::endl;
+  top->anUselessInput = 19780823;
+  top->tick();
+  std::cout << "anUselessOutput: " << top->anUselessOutput << " @ "
+            << top->whatTime() << std::endl;
   // tick 10 times;
-  top.tick(10);
+  top->tick(10);
   // tick to termination;
-  while (!top.terminated()) {
-    // 可在此设置输入
-    top.tick();
+  while (!top->terminated()) {
+    // 可在此处设置输入
+    top->tick();
     // 可在此处读取输出
   }
 
   std::cout << ">> reset the model and start again <<" << std::endl;
-  // reset
-  top.reset();
+  // create (reset) a new model
+  top = std::make_shared<Top>();
   // and then another way to tick to termination
-  top.tickToTermination();
+  top->tickToTermination();
   return 0;
 }
 ```
@@ -369,12 +371,13 @@ int main() {
 以下代码部分展示了如何设置输入，推进一个周期，获取输出：
 
 ```cpp
-  Top top;
+  /* 建议总是使用智能指针保存仿真模型 */
+  std::shared_ptr<Top> top = std::make_shared<Top>();
   // tick once;
-  top.anUselessInput = 19780823;
-  top.tick();
-  std::cout << "anUselessOutput: " << top.anUselessOutput 
-            << " @ " << top.whatTime() << std::endl;
+  top->anUselessInput = 19780823;
+  top->tick();
+  std::cout << "anUselessOutput: " << top->anUselessOutput << " @ "
+            << top->whatTime() << std::endl;
 ```
 
 在 tick 之前，可设置顶层模块的输入；在 tick 之后，可获取顶层模块的输出。
@@ -393,7 +396,7 @@ anUselessOutput: 19780870 @ 1
 
 ```cpp
   // tick 10 times;
-  top.tick(10);
+  top->tick(10);
 ```
 
 调用一次推进 n 个周期，等价于调用 n 次 tick，但是不修改输入，也不读取输出。
@@ -401,18 +404,18 @@ anUselessOutput: 19780870 @ 1
 ### 仿真到结束
 
 ```cpp
-while (!top.terminated()) {
+while (!top->terminated()) {
   // 可在此处设置输入
-  top.tick();
+  top->tick();
   // 可在此处读取输出
 }
 ```
 
 运行仿真直到结束，可在每周期操作输入和输出。
 
-### `reset()`
+### 重置（重建）模型
 
-如果仿真模型已经终止（terminated 为真），则不能继续调用 tick() 函数，需要调用 `reset()` 函数重置模型，恢复到初始状态。
+如果仿真模型已经终止（terminated 为真），则不能继续调用 tick() 函数，需要重新创建模型，恢复到初始状态。
 
 `tick(n)` 暗含了在仿真终止前停止的条件，即使 n 很大，也不会超过仿真终止。
 
@@ -610,7 +613,7 @@ Wolf-Sim 会保证父模块的 `construct()` 函数在子模块的 `construct()`
 
 处于仿真终止阶段的模型调用 `terminated()` 函数会返回 true，继续调用 tick() 方法会发生运行时错误，该机制保障用户不会错误的推进已终止的模型。
 
-已终止的仿真模型如需重新运行仿真，用户需要调用 `reset()` 函数，将模型恢复到状态初始化阶段。
+已终止的仿真模型如需重新运行仿真，用户需要重新创建模型，以恢复到状态初始化阶段。
 
 # 端口与内部状态的访问
 
@@ -730,15 +733,8 @@ Top top;
 top.tick(100);
 ```
 
-如果需要重置模型，可以使用 `reset()` 函数：
+模型仿真终止后，不能继续调用 `tick()` 函数，需要重新创建模型。
 
-```cpp
-Top top;
-top.tickToTermination();
-top.reset();
-// 重新运行
-top.tickToTermination();
-```
 
 # 仿真确定性
 
@@ -752,7 +748,7 @@ top.setDeterministic(true);
 top.tickToTermination();
 ```
 
-顶层模块的 `setDeterministic()` 函数需要在首次调用 `tick()` 函数之前或者 `reset()` 后调用。
+顶层模块的 `setDeterministic()` 函数需要在首次调用 `tick()` 函数之前调用。
 
 内部模块可在 `construct()` 函数中调用 `setDeterministic()` 函数，以保证其子模块的仿真确定性。
 

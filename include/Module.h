@@ -36,7 +36,6 @@ class Module : public std::enable_shared_from_this<Module> {
   void tick(SimTime_t tickCount);
   void tickToTermination();
   bool terminated();
-  void reset();
   SimTime_t whatTime();
   void setModuleLabel(std::string label) { moduleLabel = label; }
   std::string getModuleLabel() { return moduleLabel; }
@@ -72,6 +71,10 @@ class Module : public std::enable_shared_from_this<Module> {
   std::shared_ptr<ChildTickScheduler> childTickSchedulerPtr;
 
   bool deterministic = false;
+
+    // 删除赋值运算符
+  Module& operator=(const Module&) = delete;
+  Module& operator=(Module&&) = delete;
 
   void tickRoutine(SimTime_t currentTime);
   void constructRoutine(std::shared_ptr<ModuleContext> mcPtr);
