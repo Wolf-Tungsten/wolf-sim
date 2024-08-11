@@ -54,6 +54,8 @@ class Module : public std::enable_shared_from_this<Module> {
   std::map<int, std::shared_ptr<Module>> childrenMap;
   int nextChildrenId = 0;
 
+  bool terminatedFlag = false;
+
   std::shared_ptr<ModuleContext> mcPtr;
   enum Phase {
     constructPhase,

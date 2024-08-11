@@ -5,13 +5,5 @@ namespace wolf_sim {
     std::lock_guard<std::mutex> lock(logMutex);
     std::cout << log;
   }
-
-  void ModuleContext::setTerminated(bool value) {
-    terminated = value;
-  }
-
-  bool ModuleContext::getTerminated() {
-    return terminated;
-  }
 }  // namespace wolf_sim
 

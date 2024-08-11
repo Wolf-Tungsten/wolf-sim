@@ -69,6 +69,11 @@ void Module::tickRoutine(SimTime_t currentTime) {
       logStream.str("");
       logStream.clear();
     }
+    bool childTerminated = false;
+    for (auto& child : childrenMap) {
+      childTerminated = child.second->terminated() || childTerminated; 
+    }
+    terminatedFlag = childTerminated || terminatedFlag;
     /* 状态恢复到 standby */
     modulePhase = Phase::standByPhase;
   }
@@ -83,12 +88,9 @@ void Module::sleepFor(SimTime_t time) {
 }
 
 bool Module::terminated() {
-  if (mcPtr != nullptr) {
-    return mcPtr->getTerminated();
-  } else {
-    return false;
-  }
+  return terminatedFlag;
 }
+
 
 SimTime_t Module::whatTime() {
   if (mcPtr != nullptr) {
@@ -109,9 +111,7 @@ std::ostringstream& Module::logger() {
 }
 
 void Module::terminate() {
-  if (mcPtr != nullptr) {
-    mcPtr->setTerminated(true);
-  }
+  terminatedFlag = true;
 }
 
 /* 顶层模块调用 tick、tickToEnd 方法 */
@@ -120,7 +120,6 @@ void Module::tick() {
   if (mcPtr == nullptr) {
     /* 创建 ModuleContext 对象 */
     mcPtr = std::make_shared<ModuleContext>();
-    mcPtr->setTerminated(false);
     /* 调用 constructRoutine 方法 */
     constructRoutine(mcPtr);
     /* 调用 initRoutine 方法 */
