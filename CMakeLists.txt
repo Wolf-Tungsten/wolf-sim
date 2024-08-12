@@ -4,7 +4,8 @@ project(wolf_sim
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Release)
+# cmake -DCMAKE_BUILD_TYPE=Release ..
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
 
 # 设置库的版本号
