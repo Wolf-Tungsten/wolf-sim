@@ -20,7 +20,7 @@ class StateRef {
   friend class InputRef;
   template <typename U>
   friend class OutputRef;
-  
+
  public:
   StateRef(Module* mPtr) : value(T()) { this->mPtr = mPtr; }
 
@@ -48,11 +48,11 @@ class StateRef {
   Module* mPtr;
   T value;
   virtual void modifyGuard() {
-    if (mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
+    if (mPtr->modulePhase != Module::Phase::updateChildInputPhase &&
+        mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
         mPtr->modulePhase != Module::Phase::initPhase) {
       throw std::runtime_error(
-          "Module state can only be updated in init or updateStateOutput "
-          "phase.");
+          "Module state illegal update.");
     }
   }
 };
@@ -105,13 +105,15 @@ class OutputRef : public StateRef<T> {
     this->value = outputRef.value;
     return *this;
   }
-  protected:
+
+ protected:
   void modifyGuard() override {
-    if (this->mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
-        this->mPtr->modulePhase != Module::Phase::initPhase) {
+    if (this->mPtr->modulePhase != Module::Phase::updateChildInputPhase &&
+        this->mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
+        this->mPtr->modulePhase != Module::Phase::initPhase &&
+        this->mPtr->modulePhase != Module::Phase::standByPhase) {
       throw std::runtime_error(
-          "Module output can only be updated in init or updateStateOutput "
-          "phase.");
+          "Module output illegal update.");
     }
   }
 };
