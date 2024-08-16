@@ -32,6 +32,7 @@ class Module : public std::enable_shared_from_this<Module> {
 
 
  public:
+  Module() = default;
   void tick();
   void tick(SimTime_t tickCount);
   void tickToTermination();
@@ -74,7 +75,10 @@ class Module : public std::enable_shared_from_this<Module> {
 
   bool deterministic = false;
 
-    // 删除赋值运算符
+  // 删除拷贝和移动构造函数
+  Module(const Module&) = delete;
+  Module(Module&&) = delete;
+  // 删除赋值运算符
   Module& operator=(const Module&) = delete;
   Module& operator=(Module&&) = delete;
 
