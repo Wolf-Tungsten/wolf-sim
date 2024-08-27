@@ -50,7 +50,8 @@ class StateRef {
   virtual void modifyGuard() {
     if (mPtr->modulePhase != Module::Phase::updateChildInputPhase &&
         mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
-        mPtr->modulePhase != Module::Phase::initPhase) {
+        mPtr->modulePhase != Module::Phase::initPhase &&
+        mPtr->modulePhase != Module::Phase::constructPhase) {
       throw std::runtime_error(
           "Module state illegal update.");
     }
@@ -111,7 +112,8 @@ class OutputRef : public StateRef<T> {
     if (this->mPtr->modulePhase != Module::Phase::updateChildInputPhase &&
         this->mPtr->modulePhase != Module::Phase::updateStateOutputPhase &&
         this->mPtr->modulePhase != Module::Phase::initPhase &&
-        this->mPtr->modulePhase != Module::Phase::standByPhase) {
+        this->mPtr->modulePhase != Module::Phase::standByPhase &&
+        this->mPtr->modulePhase != Module::Phase::constructPhase) {
       throw std::runtime_error(
           "Module output illegal update.");
     }
